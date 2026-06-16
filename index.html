@@ -312,9 +312,7 @@
         <button class="modal__close" type="button" data-close aria-label="Close">&times;</button>
         <h2 class="modal__title" id="enterpriseModalTitle" data-i18n="enterprise_title">Enterprise inquiry</h2>
         <p class="modal__subtitle" data-i18n="enterprise_sub">Tell us about your team and needs — we'll get back to you shortly.</p>
-        <form class="ent-form" id="enterpriseForm" name="enterprise-inquiry" method="POST">
-          <input type="hidden" name="form-name" value="enterprise-inquiry" />
-          <p class="ent-form__hp" hidden><label>Don't fill this out: <input name="bot-field" /></label></p>
+        <form class="ent-form" id="enterpriseForm">
           <div class="ent-form__field">
             <label class="ent-form__label" for="entEmail" data-i18n="enterprise_email_label">Your email address</label>
             <input class="ent-form__input" type="email" id="entEmail" name="email" required data-i18n-ph="enterprise_email_ph" placeholder="you@company.com" />

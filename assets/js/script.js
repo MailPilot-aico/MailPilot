@@ -579,14 +579,15 @@ if (enterpriseForm) {
   enterpriseForm.addEventListener('submit', async (e) => {
     e.preventDefault();
     const submit  = enterpriseForm.querySelector('.ent-form__submit');
-    const payload = new URLSearchParams(new FormData(enterpriseForm)).toString();
+    const data = new FormData(enterpriseForm);
+    const payload = JSON.stringify({ email: data.get('email'), message: data.get('message') });
     submit.disabled = true;
     submit.textContent = t('enterprise_sending');
     if (entStatus) { entStatus.textContent = ''; entStatus.dataset.type = ''; }
     try {
-      const res = await fetch('/__forms.html', {   // Netlify Forms (Next.js): an die statische Form-Datei posten
+      const res = await fetch('/.netlify/functions/enterprise-inquiry', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        headers: { 'Content-Type': 'application/json' },
         body: payload,
       });
       if (!res.ok) throw new Error('HTTP ' + res.status);

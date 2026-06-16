@@ -1,0 +1,19 @@
+# Netlify-Konfiguration für MailPilot (Next.js)
+
+[build]
+  # Next.js-Build; @netlify/plugin-nextjs übernimmt Serving + SSR/Functions.
+  command = "next build"
+  publish = ".next"
+  # Eigene Serverless-Funktionen (Claude-KI, Stripe, Geräte-Limits).
+  functions = "netlify/functions"
+
+[build.environment]
+  NODE_VERSION = "20"
+
+# Offizielles Next.js-Plugin (wird von Netlify i. d. R. automatisch erkannt;
+# hier explizit, damit der Build deterministisch ist).
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
+
+[functions]
+  node_bundler = "esbuild"

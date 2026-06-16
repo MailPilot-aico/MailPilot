@@ -1,0 +1,24 @@
+{
+  "name": "mailpilot",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "MailPilot — KI-Copilot, der aus Notizen professionelle E-Mails formuliert.",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "latest",
+    "@clerk/backend": "latest",
+    "@clerk/nextjs": "^7.5.2",
+    "@netlify/blobs": "latest",
+    "@sentry/nextjs": "^10.58.0",
+    "@supabase/supabase-js": "^2.108.2",
+    "next": "^16.2.9",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7",
+    "stripe": "latest"
+  }
+}

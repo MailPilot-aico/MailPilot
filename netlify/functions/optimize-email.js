@@ -20,7 +20,7 @@ const client = new Anthropic();
 // Modell. Alternativen für hohes Volumen / weniger Kosten:
 //   "claude-sonnet-4-6"  – günstiger, sehr gut für diese Aufgabe
 //   "claude-haiku-4-5"   – am günstigsten/schnellsten
-const MODEL = "claude-opus-4-8";
+const MODEL = "claude-sonnet-4-6";
 
 const FREE_LIMIT = 5; // Gratis-Optimierungen pro Tag und Account
 

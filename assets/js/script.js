@@ -584,7 +584,7 @@ if (enterpriseForm) {
     submit.textContent = t('enterprise_sending');
     if (entStatus) { entStatus.textContent = ''; entStatus.dataset.type = ''; }
     try {
-      const res = await fetch('/', {
+      const res = await fetch('/__forms.html', {   // Netlify Forms (Next.js): an die statische Form-Datei posten
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: payload,

@@ -619,7 +619,7 @@ body.modal-open { overflow: hidden; }
 @keyframes fade { from { opacity: 0; } }
 @keyframes pop { from { opacity: 0; transform: translateY(8px) scale(.97); } }
 
-/* ---- Limit-/Hinweis-Modal (Netlify Identity) ---- */
+/* ---- Limit-/Hinweis-Modal ---- */
 .modal__card { text-align: center; }
 .modal__icon {
   width: 56px; height: 56px;

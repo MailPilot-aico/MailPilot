@@ -1,7 +1,7 @@
 /* =========================================================
    MailPilot — Backend (Netlify Function)
    ---------------------------------------------------------
-   - Nur für angemeldete Netlify-Identity-Nutzer.
+   - Nur für angemeldete Clerk-Nutzer (Token serverseitig geprüft).
    - Zählt das Tageslimit (5/Tag) FÄLSCHUNGSSICHER pro Account
      serverseitig in Netlify Blobs – der Browser kann das
      nicht umgehen.
@@ -14,8 +14,25 @@
 
 import Anthropic from "@anthropic-ai/sdk";
 import { getStore } from "@netlify/blobs";
+import { verifyToken } from "@clerk/backend";
 
 const client = new Anthropic();
+
+// Clerk-Session-Token (Authorization: Bearer …) serverseitig prüfen und die
+// Konto-ID zurückgeben (Firma bevorzugt, sonst Nutzer). Gleiches Muster wie
+// in devices.js (serverseitige Clerk-Token-Prüfung).
+async function getAccountId(event) {
+  const headers = event.headers || {};
+  const auth = headers.authorization || headers.Authorization || "";
+  const token = auth.startsWith("Bearer ") ? auth.slice(7) : "";
+  if (!token) return null;
+  try {
+    const payload = await verifyToken(token, { secretKey: process.env.CLERK_SECRET_KEY });
+    return payload.org_id || payload.sub || null;
+  } catch {
+    return null;
+  }
+}
 
 // Modell. Alternativen für hohes Volumen / weniger Kosten:
 //   "claude-sonnet-4-6"  – günstiger, sehr gut für diese Aufgabe
@@ -70,24 +87,24 @@ Regeln:
 - Verwende die in der Zielsprache übliche, passende Anrede- und Grußformel.
 - Gib ausschließlich die übersetzte E-Mail aus – keine Einleitung, keine Erklärungen, keine Kommentare.`;
 
-export const handler = async (event, context) => {
+export const handler = async (event) => {
   // CORS-Preflight (nötig, damit die Desktop-App von einer anderen Origin
   // aus zugreifen darf; im Web-Deploy mit gleicher Origin harmlos).
   if (event.httpMethod === "OPTIONS") {
     return resp(204, null);
   }
 
-  // Nutzer aus Netlify Identity – von Netlify serverseitig verifiziert.
-  // Ist nur gesetzt, wenn ein gültiges Identity-Token mitgeschickt wurde.
-  const user = context.clientContext && context.clientContext.user;
-  if (!user) {
+  // Nutzer aus Clerk – Session-Token serverseitig mit CLERK_SECRET_KEY geprüft.
+  // accountId ist nur gesetzt, wenn ein gültiges Token mitgeschickt wurde.
+  const accountId = await getAccountId(event);
+  if (!accountId) {
     return resp(401, { error: "Bitte melde dich an, um den Copiloten zu nutzen." });
   }
 
   // Tageszähler je Account und Datum – liegt serverseitig in Netlify Blobs.
   const store = getStore("usage");
   const today = new Date().toISOString().slice(0, 10); // JJJJ-MM-TT
-  const key = `${user.sub}:${today}`;
+  const key = `${accountId}:${today}`;
   const used = parseInt((await store.get(key)) || "0", 10) || 0;
 
   // GET: aktuellen Reststand melden, ohne zu zählen.

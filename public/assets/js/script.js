@@ -291,7 +291,7 @@ function simulateOptimization(text, tone) {
 }
 
 /* =========================================================
-   Netlify Identity (Login bei Bedarf) & Limit-Anzeige
+   Anmeldestatus (Clerk) & Limit-Anzeige
    ---------------------------------------------------------
    Das Tool ist frei sichtbar; das Login-Modal erscheint erst
    beim Klick auf „E-Mail optimieren", falls nicht angemeldet.
@@ -305,7 +305,7 @@ let remainingToday = FREE_LIMIT;
 const account = document.getElementById('account');
 
 function userLabel(user) {
-  return (user && (user.user_metadata?.full_name || user.email)) || 'Account';
+  return (user && (user.fullName || user.email)) || 'Account';
 }
 
 function renderAccount() {
@@ -315,7 +315,7 @@ function renderAccount() {
       <span class="account__hint">${t('left_today').replace('{n}', remainingToday)}</span>
       <span class="account__user" title="${label}">${label}</span>
       <button class="btn-account btn-account--ghost" type="button" id="logoutBtn">${t('signout')}</button>`;
-    document.getElementById('logoutBtn').addEventListener('click', () => identity && identity.logout());
+    document.getElementById('logoutBtn').addEventListener('click', () => window.Clerk && window.Clerk.signOut());
   } else {
     account.innerHTML = `<button class="btn-account" type="button" id="loginBtn">
         <span class="btn-account__icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.5"/><path d="M5.5 20.5a6.5 6.5 0 0 1 13 0"/></svg></span>
@@ -330,11 +330,11 @@ function setRemaining(n) {
   renderAccount();
 }
 
-const identity = window.netlifyIdentity;
-
-function openLogin()  { identity ? identity.open('login')  : identityHint(); }
-function openSignup() { identity ? identity.open('signup') : identityHint(); }
-function identityHint() { alert(t('identity_hint')); }
+/* Clerk-Login: die echten Auth-Seiten liegen unter /sign-in bzw. /sign-up
+   (Next.js + ClerkProvider, siehe app/layout.jsx & app/sign-in). Clerk leitet
+   nach erfolgreicher Anmeldung automatisch zurück auf die Startseite. */
+function openLogin()  { window.location.assign('/sign-in'); }
+function openSignup() { window.location.assign('/sign-up'); }
 
 async function fetchRemaining() {
   if (!currentUser) return;
@@ -349,12 +349,49 @@ async function fetchRemaining() {
   } catch {}
 }
 
-if (identity) {
-  identity.on('init',   (user) => { currentUser = user || null; renderAccount(); fetchRemaining(); });
-  identity.on('login',  (user) => { currentUser = user; identity.close(); closeAuthModal(); renderAccount(); fetchRemaining(); });
-  identity.on('logout', ()     => { currentUser = null; remainingToday = FREE_LIMIT; renderAccount(); });
-  identity.init();
+/* =========================================================
+   Clerk-Session (Anmeldestatus & Token für Backend-Aufrufe)
+   ---------------------------------------------------------
+   @clerk/nextjs stellt im Browser window.Clerk bereit. Wir spiegeln den
+   Anmeldestatus in currentUser und holen für die Backend-Aufrufe (optimize-
+   email) ein kurzlebiges Session-Token via Clerk.session.getToken().
+   ========================================================= */
+function clerkToCurrentUser() {
+  const c = window.Clerk;
+  if (!c || !c.user) return null;
+  const u = c.user;
+  return {
+    sub: u.id,
+    email: u.primaryEmailAddress?.emailAddress || '',
+    fullName: u.fullName || '',
+    jwt: () => (c.session ? c.session.getToken() : Promise.resolve(null)),
+  };
 }
+
+function syncClerkUser() {
+  const wasLoggedIn = !!currentUser;
+  currentUser = clerkToCurrentUser();
+  if (!currentUser) remainingToday = FREE_LIMIT;
+  if (currentUser && !wasLoggedIn) closeAuthModal(); // Modal nach erfolgreichem Login schließen
+  renderAccount();
+  fetchRemaining();
+}
+
+(function initClerkSession() {
+  function attach() {
+    const c = window.Clerk;
+    if (!c) return;
+    c.addListener(syncClerkUser); // feuert bei Load und bei jeder Statusänderung
+    syncClerkUser();              // sofortiger erster Abgleich
+  }
+  if (window.Clerk) { attach(); return; }
+  // Clerk wird vom ClerkProvider asynchron nachgeladen → kurz darauf warten.
+  let tries = 0;
+  const iv = setInterval(() => {
+    if (window.Clerk) { clearInterval(iv); attach(); }
+    else if (++tries > 100) clearInterval(iv); // nach ~10 s aufgeben → Gast-/Demo-Modus
+  }, 100);
+})();
 
 /* =========================================================
    Modals: Auth, Impressum, Datenschutz

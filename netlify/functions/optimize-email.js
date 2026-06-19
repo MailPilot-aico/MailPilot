@@ -13,10 +13,18 @@
    ========================================================= */
 
 import Anthropic from "@anthropic-ai/sdk";
-import { getStore } from "@netlify/blobs";
+import { connectLambda, getStore } from "@netlify/blobs";
 import { verifyToken } from "@clerk/backend";
 
-const client = new Anthropic();
+// Anthropic-Client erst bei Bedarf erzeugen. Würde er beim Laden des Moduls
+// erstellt und fehlte der ANTHROPIC_API_KEY, würde die GANZE Funktion abstürzen
+// (auch der Login-Check und die GET-Reststandsabfrage). Lazy-Init hält die
+// Funktion stabil; ein fehlender Schlüssel meldet sich erst beim Optimieren.
+let _client;
+function getClient() {
+  if (!_client) _client = new Anthropic(); // liest ANTHROPIC_API_KEY aus der Umgebung
+  return _client;
+}
 
 // Clerk-Session-Token (Authorization: Bearer …) serverseitig prüfen und die
 // Konto-ID zurückgeben (Firma bevorzugt, sonst Nutzer). Gleiches Muster wie
@@ -101,11 +109,18 @@ export const handler = async (event) => {
     return resp(401, { error: "Bitte melde dich an, um den Copiloten zu nutzen." });
   }
 
+  // WICHTIG: In einer klassischen (Lambda-)Netlify-Function muss der Blobs-Kontext
+  // EINMAL pro Aufruf mit dem Event verbunden werden – sonst wirft jeder store-Zugriff
+  // „MissingBlobsEnvironmentError" und die GANZE Funktion liefert 500 (Generierung tot).
+  // Bei v2-Functions ist das automatisch; bei dieser v1-Function nicht.
+  try { connectLambda(event); } catch {}
+
   // Tageszähler je Account und Datum – liegt serverseitig in Netlify Blobs.
-  const store = getStore("usage");
+  // Robust: schlägt Blobs fehl, blockiert das NICHT die Generierung (Limit greift dann
+  // nur „best effort"). So funktioniert die KI auch ohne korrekt eingerichtetes Blobs.
   const today = new Date().toISOString().slice(0, 10); // JJJJ-MM-TT
   const key = `${accountId}:${today}`;
-  const used = parseInt((await store.get(key)) || "0", 10) || 0;
+  const used = await readUsed(key);
 
   // GET: aktuellen Reststand melden, ohne zu zählen.
   if (event.httpMethod === "GET") {
@@ -139,7 +154,7 @@ export const handler = async (event) => {
       return resp(400, { error: "Sprache nicht unterstützt." });
     }
     try {
-      const message = await client.messages.create({
+      const message = await getClient().messages.create({
         model: MODEL,
         max_tokens: 2000,
         system: translateSystem(LANGS[targetLang]),
@@ -160,7 +175,7 @@ export const handler = async (event) => {
   const tone = TONES[body.tone] ? body.tone : "professionell";
 
   try {
-    const message = await client.messages.create({
+    const message = await getClient().messages.create({
       model: MODEL,
       max_tokens: 2000,
       system: SYSTEM_PROMPT,
@@ -172,14 +187,38 @@ export const handler = async (event) => {
       ],
     });
 
-    // Verbrauch erst nach Erfolg hochzählen.
-    await store.set(key, String(used + 1));
+    // Verbrauch erst nach Erfolg hochzählen (Blobs-Fehler werden geschluckt –
+    // sie dürfen das bereits erzeugte Ergebnis nicht zunichtemachen).
+    await bumpUsed(key, used);
 
     return resp(200, { email: extractText(message), remaining: Math.max(0, FREE_LIMIT - (used + 1)) });
   } catch (err) {
     return apiError(err);
   }
 };
+
+// Tageslimit lesen – schlägt Netlify Blobs fehl, wird 0 angenommen (Limit greift
+// dann nicht, aber die Generierung läuft weiter). NIE den Aufruf abbrechen lassen.
+async function readUsed(key) {
+  try {
+    const store = getStore("usage");
+    return parseInt((await store.get(key)) || "0", 10) || 0;
+  } catch (err) {
+    console.error("Blobs nicht verfügbar (Limit wird nicht gezählt):", err?.message || err);
+    return 0;
+  }
+}
+
+// Tageslimit hochzählen – Fehler werden bewusst geschluckt, damit ein Blobs-Problem
+// das bereits erzeugte Ergebnis nicht kaputt macht.
+async function bumpUsed(key, used) {
+  try {
+    const store = getStore("usage");
+    await store.set(key, String(used + 1));
+  } catch (err) {
+    console.error("Blobs-Schreiben fehlgeschlagen:", err?.message || err);
+  }
+}
 
 // Textblöcke der Claude-Antwort zu einem String zusammenführen.
 function extractText(message) {

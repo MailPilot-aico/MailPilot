@@ -165,6 +165,18 @@ body {
   border: 1px solid rgba(168, 85, 247, .32);
   padding: 3px 9px; border-radius: 999px; font-weight: 600;
 }
+/* Tages-Limit-Anzeige im KI-Vorschlag-Header (links neben der Übersetzen-Auswahl) */
+.panel__quota {
+  font-size: 12px;
+  color: var(--text-muted);
+  background: var(--surface-3);
+  border: 1px solid var(--border);
+  padding: 4px 10px;
+  border-radius: 999px;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.panel__quota[hidden] { display: none; }
 
 /* ---- Textfelder ---- */
 .field {

@@ -75,6 +75,7 @@ function exampleFor(code) {
    Sprache anwenden & umschalten
    ========================================================= */
 function applyLang(next) {
+  const langChanged = next && next !== lang;
   if (next) { lang = next; try { localStorage.setItem('ec_lang', lang); } catch {} }
   document.documentElement.lang = lang;
   document.title = t('doc_title');
@@ -89,8 +90,13 @@ function applyLang(next) {
   }
   updateCharCount();
   renderAccount();
+  renderQuota();
   updateLangUI();
   updateTranslateUI();
+  // Standardsprache gewechselt → echtes Ergebnis automatisch in die neue
+  // Standardsprache bringen (außer der Nutzer hat für diese E-Mail manuell
+  // eine andere Zielsprache gewählt).
+  if (langChanged && hasRealResult && !outputLangManual) applyDefaultTranslation();
 }
 
 const langBtn     = document.getElementById('langBtn');
@@ -186,6 +192,10 @@ async function runOptimize() {
     copyBtn.disabled = false;
     setStatus(result.source === 'api' ? t('st_ready') : t('st_demo'), result.source === 'api' ? 'ok' : 'warn');
     if (typeof result.remaining === 'number') setRemaining(result.remaining);
+    // Standardmäßig die oben eingestellte Sprache verwenden: das echte Ergebnis
+    // automatisch in die Standardsprache übersetzen (kein extra Klick auf
+    // „Übersetzen" nötig). Im Demo-Modus bleibt der Beispieltext deutsch.
+    if (result.source === 'api') await applyDefaultTranslation();
   } catch (err) {
     console.error(err);
     setStatus(t('st_error'), 'error');
@@ -252,6 +262,10 @@ async function generateEmail(text, tone) {
     if (data.limitReached) return { limitReached: true };
     throw new Error(data.error || 'Rate limit');
   }
+  // Backend nicht erreichbar / Serverfehler (z. B. fehlender API-Schlüssel,
+  // Funktion abgestürzt) → auf den Demo-Modus zurückfallen, damit die
+  // Optimierung immer reagiert und ein Ergebnis liefert.
+  if (res.status >= 500) return { email: simulateOptimization(text, tone), source: 'demo' };
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
     throw new Error(data.error || `API-Fehler (${res.status})`);
@@ -311,8 +325,9 @@ function userLabel(user) {
 function renderAccount() {
   if (currentUser) {
     const label = userLabel(currentUser);
+    // Hinweis: Das Tageslimit („Noch X heute") steht jetzt unten im
+    // KI-Vorschlag-Header (siehe #quotaHint / renderQuota), nicht mehr hier oben.
     account.innerHTML = `
-      <span class="account__hint">${t('left_today').replace('{n}', remainingToday)}</span>
       <span class="account__user" title="${label}">${label}</span>
       <button class="btn-account btn-account--ghost" type="button" id="logoutBtn">${t('signout')}</button>`;
     document.getElementById('logoutBtn').addEventListener('click', () => window.Clerk && window.Clerk.signOut());
@@ -325,9 +340,24 @@ function renderAccount() {
   }
 }
 
+/* Tages-Limit-Anzeige im KI-Vorschlag-Header (links neben der Übersetzen-Auswahl).
+   Nur für angemeldete Nutzer sichtbar – Gäste sehen keinen Reststand. */
+const quotaHint = document.getElementById('quotaHint');
+function renderQuota() {
+  if (!quotaHint) return;
+  if (currentUser) {
+    quotaHint.hidden = false;
+    quotaHint.textContent = t('left_today').replace('{n}', remainingToday);
+  } else {
+    quotaHint.hidden = true;
+    quotaHint.textContent = '';
+  }
+}
+
 function setRemaining(n) {
   if (typeof n === 'number') remainingToday = Math.max(0, n);
   renderAccount();
+  renderQuota();
 }
 
 /* Clerk-Login: die echten Auth-Seiten liegen unter /sign-in bzw. /sign-up
@@ -374,6 +404,7 @@ function syncClerkUser() {
   if (!currentUser) remainingToday = FREE_LIMIT;
   if (currentUser && !wasLoggedIn) closeAuthModal(); // Modal nach erfolgreichem Login schließen
   renderAccount();
+  renderQuota();                                     // Tages-Limit-Anzeige (unten) aktualisieren
   if (typeof renderSettingsAccount === 'function') renderSettingsAccount(); // Settings-Konto mitziehen
   fetchRemaining();
 }
@@ -505,12 +536,28 @@ if (appHeader) {
    ========================================================= */
 function updateTranslateUI() {
   if (xlateCurrent) {
+    // Button heißt standardmäßig „Übersetzen" (Auslöser zum Wechsel der Sprache).
+    // Hat der Nutzer für diese E-Mail manuell eine andere Sprache gewählt, zeigt
+    // der Button stattdessen diese Sprache an.
     xlateCurrent.textContent = outputLangManual ? (XLATE_NAMES[outputLang] || t('translate_label')) : t('translate_label');
   }
   if (xlateWrap) xlateWrap.classList.toggle('is-active', outputLangManual);
+  // Aktuelle Zielsprache im Menü hervorheben – egal ob Standard oder manuell.
   document.querySelectorAll('.xlate__opt').forEach((o) => {
-    o.classList.toggle('is-active', outputLangManual && o.dataset.tl === outputLang);
+    o.classList.toggle('is-active', o.dataset.tl === outputLang);
   });
+}
+
+/* Standard-Übersetzung: das echte Ergebnis automatisch in der oben eingestellten
+   Standardsprache anzeigen – ohne dass der Nutzer „Übersetzen" klicken muss.
+   Wird nach jeder Optimierung und bei jedem Sprachwechsel aufgerufen, solange der
+   Nutzer für diese E-Mail keine abweichende Zielsprache manuell gewählt hat. */
+async function applyDefaultTranslation() {
+  if (!hasRealResult || outputLangManual) return;
+  const target = SUPPORTED.includes(lang) ? lang : 'de';
+  outputLang = target;
+  updateTranslateUI();
+  await translateResult(target);   // 'de' = Original wiederherstellen, sonst per KI übersetzen
 }
 
 async function selectTargetLang(code) {
@@ -871,7 +918,18 @@ async function openPortal(btn) {
   } finally { btn.disabled = false; btn.textContent = orig; }
 }
 
-/* ---- Download-Buttons: vor 404 schützen + verständliche Meldung ---- */
+/* ---- Download starten: echter Datei-Download mit Dateinamen-Hinweis ---- */
+function triggerDownload(href) {
+  const link = document.createElement('a');
+  link.href = href;
+  link.download = href.split('/').pop() || '';   // Dateiname für den „Speichern unter"-Dialog
+  link.rel = 'noopener';
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+}
+
+/* ---- Download-Buttons: Datei prüfen, dann herunterladen oder Hinweis zeigen ---- */
 document.querySelectorAll('.btn--download').forEach((a) => {
   a.addEventListener('click', async (e) => {
     e.preventDefault();
@@ -880,14 +938,17 @@ document.querySelectorAll('.btn--download').forEach((a) => {
     const label = a.querySelector('.btn__label');
     const orig = label ? label.textContent : '';
     if (label) label.textContent = t('dl_checking');
+    // Datei fehlt eindeutig (404 u. Ä.) → freundlicher Hinweis. Erlaubt der Server
+    // kein HEAD (405) oder gibt es einen Netzwerkfehler, wird der Download einfach
+    // versucht – das behebt das fälschliche „nicht verfügbar" der alten Logik.
+    let available = true;
     try {
       const res = await fetch(href, { method: 'HEAD' });
-      // res.redirected fängt den Fall ab, dass eine geschützte Route den
-      // Download auf /sign-in umleitet (dann ist die Datei nicht direkt da).
-      if (res.ok && !res.redirected) { window.location.href = href; } // Datei vorhanden → Download starten
-      else { toast(t('dl_unavailable'), 'warn'); }                    // 404/Redirect → freundliche Meldung
-    } catch { toast(t('dl_unavailable'), 'warn'); }
-    finally { if (label) label.textContent = orig; }
+      if (!res.ok && res.status !== 405) available = false;
+    } catch { /* HEAD nicht möglich → Download trotzdem versuchen */ }
+    if (available) triggerDownload(href);
+    else toast(t('dl_unavailable'), 'warn');
+    if (label) label.textContent = orig;
   });
 });
 

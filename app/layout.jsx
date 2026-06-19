@@ -14,7 +14,7 @@ export default function RootLayout({ children }) {
           {/* Theme früh setzen (vor dem ersten Paint), um Flackern zu vermeiden. */}
           <script
             dangerouslySetInnerHTML={{
-              __html: "try{if(localStorage.getItem('mp_theme')==='light')document.documentElement.dataset.theme='light';}catch(e){}",
+              __html: "try{if(localStorage.getItem('mp_theme')==='light')document.documentElement.dataset.theme='light';}catch(e){}try{if(new URLSearchParams(location.search).get('app')==='1')document.documentElement.classList.add('app-mode');}catch(e){}",
             }}
           />
           <meta name="theme-color" content="#0a0710" />

@@ -257,6 +257,16 @@ body {
 }
 @media (max-width: 480px) { .sliders { grid-template-columns: 1fr; } }
 
+/* ---- App-Modus (Desktop-App lädt /?app=1): NUR das Tool, kein Marketing ---- */
+.app-mode .hero,
+.app-mode .benefits,
+.app-mode .pricing,
+.app-mode .faq,
+.app-mode .howto,
+.app-mode .app-footer { display: none !important; }
+.app-mode .workspace { margin-top: 10px; }
+.app-mode .brand__badge { display: none; }
+
 /* ---- Buttons ---- */
 .btn {
   display: inline-flex;

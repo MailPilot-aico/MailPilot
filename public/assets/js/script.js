@@ -27,6 +27,18 @@ function detectLang() {
 
 let lang = detectLang();
 
+/* App-Modus: In der Desktop-App (URL „?app=1" oder Tauri-WebView) wird NUR das
+   Tool gezeigt – das Marketing (Hero/Vorteile/Preise/FAQ/Footer) blendet die
+   Klasse .app-mode per CSS aus. Login + KI laufen ganz normal über die Seite. */
+try {
+  const inApp = (new URLSearchParams(location.search).get('app') === '1')
+    || !!(window.__TAURI__ || window.__TAURI_INTERNALS__);
+  if (inApp) {
+    document.documentElement.classList.add('app-mode');
+    if (document.body) document.body.classList.add('app-mode');
+  }
+} catch {}
+
 function t(key) {
   const dict = I18N[lang] || I18N.en;
   return (key in dict ? dict[key] : I18N.en[key]) ?? key;

@@ -56,21 +56,12 @@ const TONES = {
   locker:        "locker und ungezwungen",
 };
 
-// Regler „Länge" (0–2) und „Formalität" (0–2) vom Frontend → Prompt-Anweisung.
-const LENGTHS = {
-  0: "kurz und knapp – nur das Nötigste, wenige Sätze",
-  1: "von angemessener, mittlerer Länge",
-  2: "ausführlich und gut ausformuliert",
-};
-const FORMALITIES = {
-  0: "locker und persönlich (lockere Anrede, gerne Du-Form, wenn es passt)",
-  1: "neutral – weder steif noch zu salopp",
-  2: "sehr förmlich und höflich (Sie-Form, gewählte, formelle Ausdrucksweise)",
-};
-// Reglerwert sicher auf 0/1/2 begrenzen (Standard 1 = Mitte).
-function clampLevel(v) {
+// Regler „Länge" und „Formalität" kommen STUFENLOS als Wert 0–100 vom Frontend
+// und werden als Skala in den Prompt geschrieben (Standard 50 = Mitte).
+function clampScale(v) {
   const n = parseInt(v, 10);
-  return n === 0 || n === 1 || n === 2 ? n : 1;
+  if (Number.isNaN(n)) return 50;
+  return Math.max(0, Math.min(100, n));
 }
 
 const SYSTEM_PROMPT = `Du bist ein E-Mail-Copilot. Aus den rohen Notizen oder Stichpunkten des Nutzers formulierst du eine fertige, gut lesbare deutsche E-Mail.
@@ -190,21 +181,21 @@ export const handler = async (event) => {
   }
 
   const tone = TONES[body.tone] ? body.tone : "professionell";
-  const length = clampLevel(body.length);
-  const formality = clampLevel(body.formality);
+  const length = clampScale(body.length);       // 0 = sehr kurz … 100 = sehr ausführlich
+  const formality = clampScale(body.formality);  // 0 = sehr locker … 100 = sehr förmlich
 
   try {
     const message = await getClient().messages.create({
       model: MODEL,
-      max_tokens: length === 2 ? 3000 : 2000, // „ausführlich" braucht etwas mehr Spielraum
+      max_tokens: length >= 67 ? 3000 : 2000, // bei hoher „Länge" etwas mehr Spielraum
       system: SYSTEM_PROMPT,
       messages: [
         {
           role: "user",
           content:
             `Gewünschter Tonfall: ${TONES[tone]}.\n` +
-            `Gewünschte Länge: ${LENGTHS[length]}.\n` +
-            `Gewünschte Förmlichkeit: ${FORMALITIES[formality]}.\n\n` +
+            `Gewünschte Länge auf einer Skala von 0 (sehr kurz und knapp) bis 100 (sehr ausführlich und detailliert): ${length}.\n` +
+            `Gewünschte Förmlichkeit auf einer Skala von 0 (sehr locker, Du-Form) bis 100 (sehr förmlich, Sie-Form): ${formality}.\n\n` +
             `Notizen / Roher Entwurf:\n${text}`,
         },
       ],

@@ -62,8 +62,8 @@ const xlateMenu    = document.getElementById('xlateMenu');
 const xlateCurrent = document.getElementById('xlateCurrent');
 
 let activeTone = 'professionell';
-let activeLength    = 1;   // Regler Länge:     0 = kurz, 1 = mittel, 2 = ausführlich
-let activeFormality = 1;   // Regler Formalität: 0 = locker, 1 = neutral, 2 = förmlich
+let activeLength    = 50;  // Regler Länge (stufenlos 0–100, 50 = mittel)
+let activeFormality = 50;  // Regler Formalität (stufenlos 0–100, 50 = neutral)
 let hasRealResult = false;   // true, sobald ein echtes KI-Ergebnis im Ausgabefeld steht
 
 /* ---- Übersetzung der Ausgabe ---- */
@@ -170,11 +170,14 @@ tonePills.forEach((pill) => {
 
 /* ---- Regler „Länge" & „Formalität" (wie in der Desktop-App) ----
    Die ausgewählten Stufen (0–2) werden beim Optimieren ans Backend übergeben. */
-function lenLabels()  { return [t('len_short'), t('len_medium'), t('len_long')]; }
-function formLabels() { return [t('form_casual'), t('form_neutral'), t('form_formal')]; }
+// 5 Beschriftungs-Stufen über den stufenlosen Regler (0–100). Der Knopf gleitet
+// flüssig; das Wort rechts zeigt die aktuelle Tendenz an.
+function lenLabels()  { return [t('len_vshort'), t('len_short'), t('len_medium'), t('len_long'), t('len_vlong')]; }
+function formLabels() { return [t('form_vcasual'), t('form_casual'), t('form_neutral'), t('form_formal'), t('form_vformal')]; }
+function sliderBucket(v) { return Math.max(0, Math.min(4, Math.round((+v || 0) / 25))); }
 function updateSliderLabels() {
-  if (lenVal && lenRange)   lenVal.textContent  = lenLabels()[+lenRange.value]   ?? '';
-  if (formVal && formRange) formVal.textContent = formLabels()[+formRange.value] ?? '';
+  if (lenVal && lenRange)   lenVal.textContent  = lenLabels()[sliderBucket(lenRange.value)]   ?? '';
+  if (formVal && formRange) formVal.textContent = formLabels()[sliderBucket(formRange.value)] ?? '';
 }
 if (lenRange) {
   lenRange.addEventListener('input', () => { activeLength = +lenRange.value; updateSliderLabels(); });

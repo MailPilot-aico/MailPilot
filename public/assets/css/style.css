@@ -1093,6 +1093,9 @@ html { scroll-behavior: smooth; }
 [data-theme="light"] .btn--ghost:not(:disabled):hover,
 [data-theme="light"] .btn-account--ghost:hover,
 [data-theme="light"] .modal__close:hover { background: var(--surface-3); }
+/* Hero-Eyebrow („KI-E-Mail-Assistent – jetzt mit Auto-Übersetzung") im Light Mode
+   dunkel/lesbar machen (im Dark Mode bleibt es hell über die Standardregel). */
+[data-theme="light"] .hero__eyebrow { color: var(--text); }
 
 /* =========================================================
    Einstellungen: Zahnrad, Panel, Account, Abonnement, Toast

@@ -1021,11 +1021,15 @@ window.addEventListener('beforeinstallprompt', (e) => {
 });
 if (pwaInstallBtn) {
   pwaInstallBtn.addEventListener('click', async () => {
-    if (!deferredInstallPrompt) return;
-    deferredInstallPrompt.prompt();
-    try { await deferredInstallPrompt.userChoice; } catch {}
-    deferredInstallPrompt = null;
-    pwaInstallBtn.hidden = true;
+    if (deferredInstallPrompt) {
+      deferredInstallPrompt.prompt();
+      try { await deferredInstallPrompt.userChoice; } catch {}
+      deferredInstallPrompt = null;
+      pwaInstallBtn.hidden = true;
+    } else {
+      // Browser bietet (noch) keinen direkten Dialog → kurze Anleitung zeigen.
+      toast(t('install_hint'), 'warn');
+    }
   });
 }
 window.addEventListener('appinstalled', () => { if (pwaInstallBtn) pwaInstallBtn.hidden = true; });

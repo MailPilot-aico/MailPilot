@@ -257,6 +257,9 @@ body {
 }
 @media (max-width: 480px) { .sliders { grid-template-columns: 1fr; } }
 
+/* ---- Alte .exe/.dmg-Download-Buttons entfernt: nur noch „Als App installieren" (PWA) ---- */
+.btn--download { display: none !important; }
+
 /* ---- App-Modus (Desktop-App lädt /?app=1): NUR das Tool, kein Marketing ---- */
 .app-mode .hero,
 .app-mode .benefits,

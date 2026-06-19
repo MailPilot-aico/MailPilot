@@ -978,64 +978,35 @@ async function openPortal(btn) {
   } finally { btn.disabled = false; btn.textContent = orig; }
 }
 
-/* ---- Download starten: echter Datei-Download mit Dateinamen-Hinweis ---- */
-function triggerDownload(href) {
-  const link = document.createElement('a');
-  link.href = href;
-  link.download = href.split('/').pop() || '';   // Dateiname für den „Speichern unter"-Dialog
-  link.rel = 'noopener';
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-}
-
-/* ---- Download-Buttons: Datei prüfen, dann herunterladen oder Hinweis zeigen ---- */
-document.querySelectorAll('.btn--download').forEach((a) => {
-  a.addEventListener('click', async (e) => {
-    e.preventDefault();
-    const href = a.getAttribute('href');
-    if (!href) return;
-    const label = a.querySelector('.btn__label');
-    const orig = label ? label.textContent : '';
-    if (label) label.textContent = t('dl_checking');
-    // Datei fehlt eindeutig (404 u. Ä.) → freundlicher Hinweis. Erlaubt der Server
-    // kein HEAD (405) oder gibt es einen Netzwerkfehler, wird der Download einfach
-    // versucht – das behebt das fälschliche „nicht verfügbar" der alten Logik.
-    let available = true;
-    try {
-      const res = await fetch(href, { method: 'HEAD' });
-      if (!res.ok && res.status !== 405) available = false;
-    } catch { /* HEAD nicht möglich → Download trotzdem versuchen */ }
-    if (available) triggerDownload(href);
-    else toast(t('dl_unavailable'), 'warn');
-    if (label) label.textContent = orig;
-  });
-});
-
-/* ---- PWA: „Als App installieren" (kein .exe → keine Windows-/SmartScreen-Warnung) ----
-   Der Browser feuert beforeinstallprompt, sobald die App installierbar ist. Dann
-   zeigen wir den Button; ein Klick öffnet den nativen Installations-Dialog. */
+/* ---- App-Installation (PWA): „Für Windows", „Für Mac" UND „Als App installieren" ----
+   Alle drei Buttons lösen denselben warnungsfreien Browser-Install aus (kein .exe/.dmg,
+   daher keine SmartScreen-Warnung). Die früheren Download-Links werden neutralisiert. */
 let deferredInstallPrompt = null;
-const pwaInstallBtn = document.getElementById('pwaInstallBtn');
-window.addEventListener('beforeinstallprompt', (e) => {
-  e.preventDefault();
-  deferredInstallPrompt = e;
-  if (pwaInstallBtn) pwaInstallBtn.hidden = false;
-});
-if (pwaInstallBtn) {
-  pwaInstallBtn.addEventListener('click', async () => {
-    if (deferredInstallPrompt) {
-      deferredInstallPrompt.prompt();
-      try { await deferredInstallPrompt.userChoice; } catch {}
-      deferredInstallPrompt = null;
-      pwaInstallBtn.hidden = true;
-    } else {
-      // Browser bietet (noch) keinen direkten Dialog → kurze Anleitung zeigen.
-      toast(t('install_hint'), 'warn');
-    }
-  });
+const installButtons = [
+  document.getElementById('pwaInstallBtn'),
+  ...document.querySelectorAll('.btn--download'),
+].filter(Boolean);
+
+async function doPwaInstall() {
+  if (deferredInstallPrompt) {
+    deferredInstallPrompt.prompt();
+    try { await deferredInstallPrompt.userChoice; } catch {}
+    deferredInstallPrompt = null;
+    installButtons.forEach((b) => { b.hidden = true; });
+  } else {
+    // Browser bietet (noch) keinen direkten Dialog → kurze Anleitung anzeigen.
+    toast(t('install_hint'), 'warn');
+  }
 }
-window.addEventListener('appinstalled', () => { if (pwaInstallBtn) pwaInstallBtn.hidden = true; });
+
+installButtons.forEach((btn) => {
+  btn.removeAttribute('href');      // alte .exe/.dmg-Verlinkung entfernen
+  btn.removeAttribute('download');
+  btn.addEventListener('click', (e) => { e.preventDefault(); doPwaInstall(); });
+});
+
+window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); deferredInstallPrompt = e; });
+window.addEventListener('appinstalled', () => { installButtons.forEach((b) => { b.hidden = true; }); });
 
 /* ---- Theme initial anwenden (Buttons synchronisieren) ---- */
 applyTheme(getTheme());

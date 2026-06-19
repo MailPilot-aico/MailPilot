@@ -1006,3 +1006,100 @@ html { scroll-behavior: smooth; }
   html { scroll-behavior: auto; }
   * { animation: none !important; transition: none !important; }
 }
+
+/* =========================================================
+   Light Mode — überschreibt die Design-Variablen.
+   Umschaltung via <html data-theme="light"> (siehe script.js).
+   ========================================================= */
+[data-theme="light"] {
+  --bg:          #f5f3fb;
+  --bg-soft:     #ffffff;
+  --surface:     #ffffff;
+  --surface-2:   #f7f5fc;
+  --surface-3:   #efeafa;
+  --border:      #e4def1;
+  --border-soft: #ece7f7;
+
+  --text:        #1a1230;
+  --text-muted:  #574e70;
+  --text-faint:  #8c83a3;
+
+  --accent:      #7c3aed;
+  --accent-2:    #9333ea;
+  --accent-3:    #a855f7;
+  --accent-soft: rgba(124, 58, 237, .10);
+
+  --shadow:      0 18px 44px -22px rgba(76, 29, 149, .28);
+}
+[data-theme="light"] body {
+  background:
+    radial-gradient(1100px 680px at 8% -12%, rgba(168, 85, 247, .10), transparent 60%),
+    radial-gradient(900px 620px at 108% -4%, rgba(139, 92, 246, .08), transparent 55%),
+    var(--bg);
+}
+[data-theme="light"] ::selection { background: rgba(124, 58, 237, .22); color: #1a1230; }
+/* Komponenten mit fest verdrahteten Dunkel-Farben fürs Light-Theme nachziehen */
+[data-theme="light"] .app-header { background: rgba(255, 255, 255, .8); }
+[data-theme="light"] .field--output { background: linear-gradient(180deg, #f4f1fb, #ece7f7); }
+[data-theme="light"] .field:focus,
+[data-theme="light"] .input:focus { background: #ffffff; }
+[data-theme="light"] .btn--ghost:not(:disabled):hover,
+[data-theme="light"] .btn-account--ghost:hover,
+[data-theme="light"] .modal__close:hover { background: var(--surface-3); }
+
+/* =========================================================
+   Einstellungen: Zahnrad, Panel, Account, Abonnement, Toast
+   ========================================================= */
+.set-gear {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 40px; height: 40px; border-radius: 12px;
+  border: 1px solid var(--border); background: var(--surface-2);
+  color: var(--text-muted); cursor: pointer; transition: .18s;
+}
+.set-gear:hover { color: var(--text); border-color: var(--accent); background: var(--surface-3); }
+.set-gear svg { width: 20px; height: 20px; display: block; }
+
+.modal__card--settings { text-align: left; max-width: 480px; width: 100%; }
+.modal__card--settings .modal__title { text-align: left; margin-bottom: 4px; }
+.set-section { margin-top: 18px; }
+.set-section + .set-section { border-top: 1px solid var(--border-soft); padding-top: 16px; }
+.set-section__title {
+  font-size: 12px; text-transform: uppercase; letter-spacing: .08em;
+  color: var(--text-faint); margin-bottom: 10px;
+}
+.set-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+
+.set-theme { display: inline-flex; background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px; padding: 3px; gap: 3px; }
+.set-theme button { border: 0; background: transparent; color: var(--text-muted); padding: 6px 14px; border-radius: 7px; cursor: pointer; font: inherit; font-size: 13px; transition: .15s; }
+.set-theme button.is-active { background: var(--accent); color: #fff; }
+
+.set-user { display: flex; align-items: center; gap: 12px; margin-bottom: 6px; }
+.set-user__avatar { width: 44px; height: 44px; border-radius: 50%; object-fit: cover; flex: 0 0 auto; }
+.set-user__avatar--ph { display: grid; place-items: center; background: var(--accent); color: #fff; font-weight: 700; }
+.set-user__meta { display: flex; flex-direction: column; min-width: 0; }
+.set-user__name { font-weight: 600; color: var(--text); }
+.set-user__email { font-size: 12px; color: var(--text-faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.set-btn { width: 100%; justify-content: center; margin-top: 8px; }
+.set-btn--danger { color: var(--danger); border-color: rgba(248, 113, 113, .4); }
+.set-btn--danger:hover { background: rgba(248, 113, 113, .12); border-color: var(--danger); }
+.set-hint { color: var(--text-muted); font-size: 13px; }
+
+.sub-grid { display: grid; grid-template-columns: auto 1fr; gap: 7px 14px; font-size: 13px; margin: 4px 0 12px; }
+.sub-grid dt { color: var(--text-faint); }
+.sub-grid dd { color: var(--text); text-align: right; font-weight: 500; margin: 0; }
+.sub-badge { display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: 11px; font-weight: 600; }
+.sub-badge--active, .sub-badge--trialing { background: rgba(52, 211, 153, .16); color: var(--success); }
+.sub-badge--canceling, .sub-badge--past_due { background: rgba(251, 191, 36, .16); color: var(--warn); }
+.sub-badge--canceled, .sub-badge--free { background: var(--surface-3); color: var(--text-muted); }
+
+.mp-toast {
+  position: fixed; left: 50%; bottom: 24px; transform: translate(-50%, 20px);
+  max-width: min(92vw, 460px); background: var(--surface-3); color: var(--text);
+  border: 1px solid var(--border); border-radius: 12px; padding: 12px 18px;
+  box-shadow: var(--shadow); font-size: 14px; z-index: 200;
+  opacity: 0; pointer-events: none; transition: opacity .25s, transform .25s; text-align: center;
+}
+.mp-toast.is-show { opacity: 1; transform: translate(-50%, 0); }
+.mp-toast[data-type="warn"] { border-color: rgba(251, 191, 36, .5); }
+.mp-toast[data-type="ok"]   { border-color: rgba(52, 211, 153, .5); }

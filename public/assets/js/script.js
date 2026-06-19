@@ -374,6 +374,7 @@ function syncClerkUser() {
   if (!currentUser) remainingToday = FREE_LIMIT;
   if (currentUser && !wasLoggedIn) closeAuthModal(); // Modal nach erfolgreichem Login schließen
   renderAccount();
+  if (typeof renderSettingsAccount === 'function') renderSettingsAccount(); // Settings-Konto mitziehen
   fetchRemaining();
 }
 
@@ -461,9 +462,12 @@ async function startCheckout(plan, btn) {
   try {
     const payload = { plan };
     if (currentUser && currentUser.email) payload.email = currentUser.email;
+    const headers = { 'Content-Type': 'application/json' };
+    // Clerk-Token mitschicken → Stripe-Abo wird dem Konto zugeordnet (Webhook/Portal).
+    try { if (currentUser && currentUser.jwt) headers['Authorization'] = `Bearer ${await currentUser.jwt()}`; } catch {}
     const res = await fetch(CHECKOUT_ENDPOINT, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify(payload),
     });
     const data = await res.json().catch(() => ({}));
@@ -638,8 +642,261 @@ if (enterpriseForm) {
   });
 }
 
+/* =========================================================
+   Einstellungen, Theme (Dark/Light), Account & Abo, Download
+   ---------------------------------------------------------
+   Wird per JavaScript in die Seite injiziert (Zahnrad oben rechts
+   + Settings-Modal), damit das vorhandene Markup unberührt bleibt.
+   ========================================================= */
+
+/* ---- UI-Texte (EN vollständig; DE; übrige Sprachen fallen via t() auf EN zurück) ---- */
+const SET_EN = {
+  set_open: 'Settings', set_title: 'Settings',
+  set_appearance: 'Appearance', set_theme: 'Theme', set_dark: 'Dark', set_light: 'Light',
+  set_account: 'Account', set_not_signed_in: 'You are not signed in.',
+  set_manage_account: 'Manage account & password', set_signin: 'Sign in',
+  set_signout: 'Sign out', set_signed_out: 'You have been signed out.',
+  set_unavailable: 'This feature is currently unavailable.',
+  set_subscription: 'Subscription', set_plan: 'Plan', set_status: 'Status',
+  set_price: 'Price', set_renews: 'Next billing', set_manage_sub: 'Manage subscription',
+  set_upgrade: 'View plans', set_sub_signin: 'Sign in to see your subscription.',
+  set_sub_loading: 'Loading…', set_sub_free: 'Free — no active subscription.',
+  set_sub_error: 'Could not load subscription data.',
+  set_sub_none_yet: 'No active subscription to manage yet.',
+  set_sub_cancels: 'Cancels on {date} — active until then.',
+  set_month: 'monthly', set_year: 'yearly',
+  dl_checking: 'Preparing…',
+  dl_unavailable: 'The download isn’t available yet — it launches soon. Questions? info@mailpilot-ai.com',
+};
+const SET_DE = {
+  set_open: 'Einstellungen', set_title: 'Einstellungen',
+  set_appearance: 'Darstellung', set_theme: 'Design', set_dark: 'Dunkel', set_light: 'Hell',
+  set_account: 'Konto', set_not_signed_in: 'Du bist nicht angemeldet.',
+  set_manage_account: 'Konto & Passwort verwalten', set_signin: 'Anmelden',
+  set_signout: 'Abmelden', set_signed_out: 'Du wurdest abgemeldet.',
+  set_unavailable: 'Diese Funktion ist derzeit nicht verfügbar.',
+  set_subscription: 'Abonnement', set_plan: 'Tarif', set_status: 'Status',
+  set_price: 'Preis', set_renews: 'Nächste Abbuchung', set_manage_sub: 'Abonnement verwalten',
+  set_upgrade: 'Tarife ansehen', set_sub_signin: 'Melde dich an, um dein Abo zu sehen.',
+  set_sub_loading: 'Lädt…', set_sub_free: 'Gratis — kein aktives Abo.',
+  set_sub_error: 'Abo-Daten konnten nicht geladen werden.',
+  set_sub_none_yet: 'Noch kein aktives Abo zum Verwalten.',
+  set_sub_cancels: 'Kündigung zum {date} — bis dahin aktiv.',
+  set_month: 'monatlich', set_year: 'jährlich',
+  dl_checking: 'Wird vorbereitet…',
+  dl_unavailable: 'Der Download ist noch nicht verfügbar — Start in Kürze. Fragen? info@mailpilot-ai.com',
+};
+if (typeof I18N !== 'undefined') { Object.assign(I18N.en, SET_EN); Object.assign(I18N.de, SET_DE); }
+
+/* ---- kleine Helfer ---- */
+function htmlToEl(html) { const t = document.createElement('template'); t.innerHTML = html.trim(); return t.content.firstElementChild; }
+function escapeHtml(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+function toast(msg, type) {
+  let el = document.getElementById('mpToast');
+  if (!el) { el = document.createElement('div'); el.id = 'mpToast'; el.className = 'mp-toast'; el.setAttribute('role', 'status'); document.body.appendChild(el); }
+  el.textContent = msg; el.dataset.type = type || ''; el.classList.add('is-show');
+  clearTimeout(toast._t); toast._t = setTimeout(() => el.classList.remove('is-show'), 5200);
+}
+
+/* ---- Theme (Dark/Light) – dauerhaft in localStorage ---- */
+const THEME_KEY = 'mp_theme';
+function getTheme() { try { return localStorage.getItem(THEME_KEY) === 'light' ? 'light' : 'dark'; } catch { return 'dark'; } }
+function applyTheme(theme) {
+  const t2 = theme === 'light' ? 'light' : 'dark';
+  document.documentElement.dataset.theme = t2;
+  try { localStorage.setItem(THEME_KEY, t2); } catch {}
+  document.querySelectorAll('[data-theme-set]').forEach((b) => b.classList.toggle('is-active', b.dataset.themeSet === t2));
+}
+
+/* ---- Zahnrad in die Kopfzeile + Settings-Modal in den Body injizieren ---- */
+const gearBtn = htmlToEl(`
+  <button class="set-gear" id="settingsBtn" type="button" title="${t('set_open')}" aria-label="${t('set_open')}">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+  </button>`);
+const headerRight = document.querySelector('.header-right');
+const accountEl = document.getElementById('account');
+if (headerRight) { accountEl ? headerRight.insertBefore(gearBtn, accountEl) : headerRight.appendChild(gearBtn); }
+
+const settingsModal = htmlToEl(`
+  <div class="modal" id="settingsModal" hidden>
+    <div class="modal__backdrop" data-close></div>
+    <div class="modal__card modal__card--settings" role="dialog" aria-modal="true" aria-labelledby="setTitle">
+      <button class="modal__close" type="button" data-close aria-label="Close">&times;</button>
+      <h2 class="modal__title" id="setTitle" data-i18n="set_title">Settings</h2>
+      <section class="set-section">
+        <div class="set-section__title" data-i18n="set_appearance">Appearance</div>
+        <div class="set-row">
+          <span data-i18n="set_theme">Theme</span>
+          <div class="set-theme">
+            <button type="button" data-theme-set="dark" data-i18n="set_dark">Dark</button>
+            <button type="button" data-theme-set="light" data-i18n="set_light">Light</button>
+          </div>
+        </div>
+      </section>
+      <section class="set-section">
+        <div class="set-section__title" data-i18n="set_account">Account</div>
+        <div id="setAccountBody"></div>
+      </section>
+      <section class="set-section">
+        <div class="set-section__title" data-i18n="set_subscription">Subscription</div>
+        <div id="setSubBody"></div>
+      </section>
+    </div>
+  </div>`);
+document.body.appendChild(settingsModal);
+
+// Zahnrad öffnet das Panel und lädt Konto + Abo frisch.
+gearBtn.addEventListener('click', () => { renderSettingsAccount(); renderSubscription(); openModal(settingsModal); });
+// Schließen (×/Hintergrund) – Escape übernimmt der globale Handler weiter oben.
+settingsModal.querySelectorAll('[data-close]').forEach((el) => el.addEventListener('click', () => closeModal(settingsModal)));
+// Theme-Umschalter
+settingsModal.querySelectorAll('[data-theme-set]').forEach((b) => b.addEventListener('click', () => applyTheme(b.dataset.themeSet)));
+
+/* ---- Account-Bereich (über Clerk) ---- */
+function renderSettingsAccount() {
+  const box = document.getElementById('setAccountBody');
+  if (!box) return;
+  if (currentUser) {
+    const name = userLabel(currentUser);
+    const email = currentUser.email || '';
+    const img = (window.Clerk && window.Clerk.user && window.Clerk.user.imageUrl) || '';
+    const avatar = (typeof img === 'string' && img.startsWith('https://'))
+      ? `<img class="set-user__avatar" src="${escapeHtml(img)}" alt="" referrerpolicy="no-referrer" />`
+      : `<span class="set-user__avatar set-user__avatar--ph">${escapeHtml((name[0] || '?').toUpperCase())}</span>`;
+    box.innerHTML = `
+      <div class="set-user">${avatar}
+        <div class="set-user__meta">
+          <span class="set-user__name">${escapeHtml(name)}</span>
+          ${email ? `<span class="set-user__email">${escapeHtml(email)}</span>` : ''}
+        </div>
+      </div>
+      <button class="btn btn--ghost set-btn" id="setManageBtn">${t('set_manage_account')}</button>
+      <button class="btn btn--ghost set-btn set-btn--danger" id="setSignoutBtn">${t('set_signout')}</button>`;
+    // Clerk-UserProfile deckt Profil, Passwort ändern, verbundene Konten & Konto löschen ab.
+    document.getElementById('setManageBtn').onclick = () => {
+      if (window.Clerk && typeof window.Clerk.openUserProfile === 'function') window.Clerk.openUserProfile();
+      else toast(t('set_unavailable'), 'warn');
+    };
+    document.getElementById('setSignoutBtn').onclick = async () => {
+      try { if (window.Clerk) await window.Clerk.signOut(); } catch (e) { console.error(e); }
+      closeModal(settingsModal); toast(t('set_signed_out'), 'ok');
+    };
+  } else {
+    box.innerHTML = `<p class="set-hint">${t('set_not_signed_in')}</p>
+      <button class="btn btn--primary set-btn" id="setSigninBtn">${t('set_signin')}</button>`;
+    document.getElementById('setSigninBtn').onclick = () => openLogin();
+  }
+}
+
+/* ---- Abonnement-Bereich (Status + Stripe-Portal) ---- */
+const SUBSCRIPTION_ENDPOINT = '/.netlify/functions/subscription-status';
+const PORTAL_ENDPOINT       = '/.netlify/functions/create-portal-session';
+
+function planLabel(plan) { return plan && plan !== 'free' ? plan.charAt(0).toUpperCase() + plan.slice(1) : t('set_sub_free'); }
+function fmtMoney(amount, currency) {
+  if (amount == null || !currency) return '—';
+  try { return new Intl.NumberFormat(lang, { style: 'currency', currency: currency.toUpperCase() }).format(amount / 100); }
+  catch { return (amount / 100) + ' ' + String(currency).toUpperCase(); }
+}
+function fmtDate(ms) {
+  if (!ms) return '—';
+  try { return new Date(ms).toLocaleDateString(lang, { year: 'numeric', month: 'long', day: 'numeric' }); }
+  catch { return new Date(ms).toLocaleDateString(); }
+}
+function statusBadge(status) { const s = status || 'free'; return `<span class="sub-badge sub-badge--${escapeHtml(s)}">${escapeHtml(s)}</span>`; }
+
+function renderSubHtml(data) {
+  const sub = data.subscription;
+  const plan = data.plan || 'free';
+  if (plan === 'free' || !sub) {
+    return `<dl class="sub-grid"><dt>${t('set_plan')}</dt><dd>${t('set_sub_free')}</dd></dl>
+      <button class="btn btn--primary set-btn" data-sub-action="upgrade">${t('set_upgrade')}</button>`;
+  }
+  const interval = sub.interval === 'year' ? t('set_year') : t('set_month');
+  const rows =
+    `<dt>${t('set_plan')}</dt><dd>${escapeHtml(planLabel(plan))}</dd>` +
+    `<dt>${t('set_price')}</dt><dd>${fmtMoney(sub.amount, sub.currency)} / ${interval}</dd>` +
+    `<dt>${t('set_status')}</dt><dd>${statusBadge(sub.cancelAtPeriodEnd ? 'canceling' : sub.status)}</dd>` +
+    `<dt>${t('set_renews')}</dt><dd>${fmtDate(sub.currentPeriodEnd)}</dd>`;
+  const note = (sub.cancelAtPeriodEnd && sub.currentPeriodEnd)
+    ? `<p class="set-hint">${t('set_sub_cancels').replace('{date}', fmtDate(sub.currentPeriodEnd))}</p>` : '';
+  return `<dl class="sub-grid">${rows}</dl>${note}
+    <button class="btn btn--ghost set-btn" data-sub-action="manage">${t('set_manage_sub')}</button>`;
+}
+
+function wireSubButtons(box) {
+  box.querySelectorAll('[data-sub-action]').forEach((b) => {
+    b.addEventListener('click', () => {
+      if (b.dataset.subAction === 'upgrade') {
+        closeModal(settingsModal);
+        document.getElementById('preise')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      } else { openPortal(b); }
+    });
+  });
+}
+
+async function renderSubscription() {
+  const box = document.getElementById('setSubBody');
+  if (!box) return;
+  if (!currentUser) { box.innerHTML = `<p class="set-hint">${t('set_sub_signin')}</p>`; return; }
+  box.innerHTML = `<p class="set-hint">${t('set_sub_loading')}</p>`;
+  try {
+    const headers = {};
+    if (currentUser.jwt) headers['Authorization'] = `Bearer ${await currentUser.jwt()}`;
+    const res = await fetch(SUBSCRIPTION_ENDPOINT, { headers });
+    if (res.status === 404) { box.innerHTML = renderSubHtml({ plan: 'free' }); wireSubButtons(box); return; } // Funktion (noch) nicht deployt
+    if (!res.ok) throw new Error('status ' + res.status);
+    const data = await res.json();
+    box.innerHTML = renderSubHtml(data);
+    wireSubButtons(box);
+  } catch (e) {
+    console.error('Abo-Status:', e);
+    box.innerHTML = `<p class="set-hint">${t('set_sub_error')}</p>`;
+  }
+}
+
+async function openPortal(btn) {
+  if (!currentUser) return;
+  const orig = btn.textContent;
+  btn.disabled = true; btn.textContent = t('set_sub_loading');
+  try {
+    const headers = { 'Content-Type': 'application/json' };
+    if (currentUser.jwt) headers['Authorization'] = `Bearer ${await currentUser.jwt()}`;
+    const res = await fetch(PORTAL_ENDPOINT, { method: 'POST', headers });
+    const data = await res.json().catch(() => ({}));
+    if (res.ok && data.url) { window.location.href = data.url; return; }
+    toast(data.noCustomer ? t('set_sub_none_yet') : (data.error || t('set_sub_error')), 'warn');
+  } catch (e) {
+    console.error(e); toast(t('set_sub_error'), 'warn');
+  } finally { btn.disabled = false; btn.textContent = orig; }
+}
+
+/* ---- Download-Buttons: vor 404 schützen + verständliche Meldung ---- */
+document.querySelectorAll('.btn--download').forEach((a) => {
+  a.addEventListener('click', async (e) => {
+    e.preventDefault();
+    const href = a.getAttribute('href');
+    if (!href) return;
+    const label = a.querySelector('.btn__label');
+    const orig = label ? label.textContent : '';
+    if (label) label.textContent = t('dl_checking');
+    try {
+      const res = await fetch(href, { method: 'HEAD' });
+      // res.redirected fängt den Fall ab, dass eine geschützte Route den
+      // Download auf /sign-in umleitet (dann ist die Datei nicht direkt da).
+      if (res.ok && !res.redirected) { window.location.href = href; } // Datei vorhanden → Download starten
+      else { toast(t('dl_unavailable'), 'warn'); }                    // 404/Redirect → freundliche Meldung
+    } catch { toast(t('dl_unavailable'), 'warn'); }
+    finally { if (label) label.textContent = orig; }
+  });
+});
+
+/* ---- Theme initial anwenden (Buttons synchronisieren) ---- */
+applyTheme(getTheme());
+
 /* ---- Start ---- */
 applyLang();
+renderSettingsAccount();
 
 /* ---- Rückkehr von Stripe Checkout: kurze Rückmeldung anzeigen ---- */
 (() => {

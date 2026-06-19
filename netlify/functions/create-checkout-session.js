@@ -5,6 +5,22 @@
    ========================================================= */
 
 import Stripe from "stripe";
+import { verifyToken } from "@clerk/backend";
+
+// Clerk-Token (optional) → Konto-ID, damit das Abo dem Konto zugeordnet
+// werden kann (client_reference_id + Subscription-Metadaten für den Webhook).
+async function getAccountId(event) {
+  const h = event.headers || {};
+  const auth = h.authorization || h.Authorization || "";
+  const token = auth.startsWith("Bearer ") ? auth.slice(7) : "";
+  if (!token) return null;
+  try {
+    const payload = await verifyToken(token, { secretKey: process.env.CLERK_SECRET_KEY });
+    return payload.org_id || payload.sub || null;
+  } catch {
+    return null;
+  }
+}
 
 /* =================== KONFIGURATION (hier editieren) ===================
    ⚠️ SICHERHEIT: den GEHEIMEN Schlüssel NICHT als Klartext hier eintragen!
@@ -27,7 +43,7 @@ const PRICES = { starter: PRICE_STARTER, business: PRICE_BUSINESS };
 const CORS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization",
 };
 
 function resp(statusCode, data) {
@@ -62,12 +78,19 @@ export const handler = async (event) => {
       event.headers.origin ||
       (event.headers.host ? `https://${event.headers.host}` : "");
 
+    // Konto-Zuordnung (für den Webhook): wenn ein Clerk-Token mitkommt.
+    const accountId = await getAccountId(event);
+
     const session = await stripe.checkout.sessions.create({
       mode: "subscription",
       line_items: [{ price, quantity: 1 }],
       customer_email:
         typeof body.email === "string" && body.email ? body.email : undefined,
       allow_promotion_codes: true,
+      // Verknüpft die Zahlung mit dem Clerk-Konto, damit der Webhook
+      // die richtige subscriptions-Zeile pflegen kann.
+      client_reference_id: accountId || undefined,
+      subscription_data: accountId ? { metadata: { account_id: accountId } } : undefined,
       success_url: `${origin}/?checkout=success`,
       cancel_url: `${origin}/?checkout=cancel`,
     });

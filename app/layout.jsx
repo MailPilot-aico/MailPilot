@@ -9,8 +9,14 @@ export const metadata = {
 export default function RootLayout({ children }) {
   return (
     <ClerkProvider>
-      <html lang="en">
+      <html lang="en" suppressHydrationWarning>
         <head>
+          {/* Theme früh setzen (vor dem ersten Paint), um Flackern zu vermeiden. */}
+          <script
+            dangerouslySetInnerHTML={{
+              __html: "try{if(localStorage.getItem('mp_theme')==='light')document.documentElement.dataset.theme='light';}catch(e){}",
+            }}
+          />
           <meta name="theme-color" content="#0a0710" />
           <link rel="preconnect" href="https://fonts.googleapis.com" />
           <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />

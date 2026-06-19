@@ -232,6 +232,31 @@ body {
   border-color: transparent;
 }
 
+/* ---- Regler „Länge" & „Formalität" (wie in der Desktop-App) ---- */
+.sliders { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 14px; }
+.slider__top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 7px; }
+.slider__name { font-size: 12px; font-weight: 500; color: var(--text-muted); }
+.slider__val { font-size: 12px; font-weight: 600; color: var(--accent-3); font-variant-numeric: tabular-nums; }
+.slider input[type="range"] {
+  -webkit-appearance: none; appearance: none;
+  width: 100%; height: 5px; border-radius: 999px;
+  background: var(--surface-3); border: 1px solid var(--border);
+  cursor: pointer; outline: none;
+}
+.slider input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none;
+  width: 16px; height: 16px; border-radius: 50%;
+  background: #fff; border: 3px solid var(--accent-2);
+  box-shadow: 0 3px 8px -2px rgba(0, 0, 0, .6);
+  transition: transform .12s;
+}
+.slider input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.12); }
+.slider input[type="range"]::-moz-range-thumb {
+  width: 14px; height: 14px; border-radius: 50%;
+  background: #fff; border: 3px solid var(--accent-2);
+}
+@media (max-width: 480px) { .sliders { grid-template-columns: 1fr; } }
+
 /* ---- Buttons ---- */
 .btn {
   display: inline-flex;

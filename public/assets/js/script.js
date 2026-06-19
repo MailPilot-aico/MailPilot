@@ -40,12 +40,18 @@ const copyBtn      = document.getElementById('copyBtn');
 const charCount    = document.getElementById('charCount');
 const outputStatus = document.getElementById('outputStatus');
 const tonePills    = document.querySelectorAll('.tone__pill');
+const lenRange     = document.getElementById('lenRange');
+const formRange    = document.getElementById('formRange');
+const lenVal       = document.getElementById('lenVal');
+const formVal      = document.getElementById('formVal');
 const xlateWrap    = document.getElementById('xlate');
 const xlateBtn     = document.getElementById('xlateBtn');
 const xlateMenu    = document.getElementById('xlateMenu');
 const xlateCurrent = document.getElementById('xlateCurrent');
 
 let activeTone = 'professionell';
+let activeLength    = 1;   // Regler Länge:     0 = kurz, 1 = mittel, 2 = ausführlich
+let activeFormality = 1;   // Regler Formalität: 0 = locker, 1 = neutral, 2 = förmlich
 let hasRealResult = false;   // true, sobald ein echtes KI-Ergebnis im Ausgabefeld steht
 
 /* ---- Übersetzung der Ausgabe ---- */
@@ -89,6 +95,7 @@ function applyLang(next) {
     setStatus(t('badge_example'), 'demo');
   }
   updateCharCount();
+  updateSliderLabels();   // Regler-Werte („Mittel"/„Neutral" …) in der neuen Sprache
   renderAccount();
   renderQuota();
   updateLangUI();
@@ -149,6 +156,21 @@ tonePills.forEach((pill) => {
   });
 });
 
+/* ---- Regler „Länge" & „Formalität" (wie in der Desktop-App) ----
+   Die ausgewählten Stufen (0–2) werden beim Optimieren ans Backend übergeben. */
+function lenLabels()  { return [t('len_short'), t('len_medium'), t('len_long')]; }
+function formLabels() { return [t('form_casual'), t('form_neutral'), t('form_formal')]; }
+function updateSliderLabels() {
+  if (lenVal && lenRange)   lenVal.textContent  = lenLabels()[+lenRange.value]   ?? '';
+  if (formVal && formRange) formVal.textContent = formLabels()[+formRange.value] ?? '';
+}
+if (lenRange) {
+  lenRange.addEventListener('input', () => { activeLength = +lenRange.value; updateSliderLabels(); });
+}
+if (formRange) {
+  formRange.addEventListener('input', () => { activeFormality = +formRange.value; updateSliderLabels(); });
+}
+
 /* ---- Hauptaktion: E-Mail optimieren ---- */
 optimizeBtn.addEventListener('click', runOptimize);
 input.addEventListener('keydown', (e) => {
@@ -177,7 +199,7 @@ async function runOptimize() {
   setStatus(t('st_optimizing'), 'busy');
 
   try {
-    const result = await generateEmail(text, activeTone);
+    const result = await generateEmail(text, activeTone, activeLength, activeFormality);
 
     if (result.needLogin) { openAuthModal('login'); setStatus(t('st_signin'), 'warn'); return; }
     if (result.limitReached) { setRemaining(0); openAuthModal('upgrade'); setStatus(t('st_limit'), 'warn'); return; }
@@ -235,10 +257,28 @@ copyBtn.addEventListener('click', async () => {
 
 /* =========================================================
    KI-Anbindung (Netlify Function + Demo-Fallback)
+   ---------------------------------------------------------
+   API-Basis automatisch bestimmen: Im Web (gleiche Origin – mailpilot-ai.com,
+   *.netlify.app oder localhost) wird RELATIV aufgerufen. Läuft das Frontend in
+   einem anderen Kontext – z. B. der Desktop-/Tauri-WebView mit tauri://- oder
+   file://-Origin – wird die ABSOLUTE Produktions-URL verwendet, damit die
+   Netlify-Functions überhaupt erreichbar sind.
    ========================================================= */
-const API_ENDPOINT = '/.netlify/functions/optimize-email';
+function apiRoot() {
+  try {
+    const o = (typeof location !== 'undefined' && location.origin) || '';
+    if (/^https?:\/\/(localhost|127\.0\.0\.1)(:|$|\/)/i.test(o) ||
+        /^https?:\/\/([a-z0-9-]+\.)*mailpilot-ai\.com(:|$|\/)/i.test(o) ||
+        /^https?:\/\/([a-z0-9-]+\.)*netlify\.app(:|$|\/)/i.test(o)) {
+      return '';                                 // gleiche Origin → relativ (Web)
+    }
+  } catch {}
+  return 'https://mailpilot-ai.com';             // Desktop / anderer Kontext → absolut
+}
+const API_BASE     = apiRoot();
+const API_ENDPOINT = API_BASE + '/.netlify/functions/optimize-email';
 
-async function generateEmail(text, tone) {
+async function generateEmail(text, tone, length, formality) {
   // Identity-Token mitschicken – das Backend identifiziert den Nutzer darüber
   // und zählt das Tageslimit fälschungssicher serverseitig.
   const headers = { 'Content-Type': 'application/json' };
@@ -248,9 +288,14 @@ async function generateEmail(text, tone) {
     }
   } catch {}
 
+  // Länge/Formalität (Regler-Stufen 0–2) gehen mit ans Backend.
+  const payload = { text, tone };
+  if (typeof length === 'number')    payload.length = length;
+  if (typeof formality === 'number') payload.formality = formality;
+
   let res;
   try {
-    res = await fetch(API_ENDPOINT, { method: 'POST', headers, body: JSON.stringify({ text, tone }) });
+    res = await fetch(API_ENDPOINT, { method: 'POST', headers, body: JSON.stringify(payload) });
   } catch {
     return { email: simulateOptimization(text, tone), source: 'demo' };
   }
@@ -484,7 +529,7 @@ document.addEventListener('keydown', (e) => {
    Erstellt serverseitig eine Checkout-Session und leitet den
    Browser zur sicheren, von Stripe gehosteten Bezahlseite weiter.
    Der Geheimschlüssel bleibt dabei ausschließlich serverseitig. */
-const CHECKOUT_ENDPOINT = '/.netlify/functions/create-checkout-session';
+const CHECKOUT_ENDPOINT = API_BASE + '/.netlify/functions/create-checkout-session';
 
 async function startCheckout(plan, btn) {
   if (!plan) return;
@@ -836,8 +881,8 @@ function renderSettingsAccount() {
 }
 
 /* ---- Abonnement-Bereich (Status + Stripe-Portal) ---- */
-const SUBSCRIPTION_ENDPOINT = '/.netlify/functions/subscription-status';
-const PORTAL_ENDPOINT       = '/.netlify/functions/create-portal-session';
+const SUBSCRIPTION_ENDPOINT = API_BASE + '/.netlify/functions/subscription-status';
+const PORTAL_ENDPOINT       = API_BASE + '/.netlify/functions/create-portal-session';
 
 function planLabel(plan) { return plan && plan !== 'free' ? plan.charAt(0).toUpperCase() + plan.slice(1) : t('set_sub_free'); }
 function fmtMoney(amount, currency) {

@@ -912,13 +912,14 @@ html { scroll-behavior: smooth; }
 @keyframes pulse { 50% { box-shadow: 0 0 0 7px rgba(192, 132, 252, 0); } }
 
 .hero__title {
-  max-width: 17ch;
+  max-width: 24ch;
   font-size: clamp(31px, 5.4vw, 54px);
   font-weight: 800;
   line-height: 1.07;
   letter-spacing: -.025em;
 }
 .hero__title-em {
+  display: block;   /* „– in Sekunden." steht auf einer eigenen Zeile (wie im Foto) */
   background: linear-gradient(100deg, var(--accent), var(--accent-3) 70%, #e9d5ff);
   -webkit-background-clip: text; background-clip: text;
   -webkit-text-fill-color: transparent; color: transparent;

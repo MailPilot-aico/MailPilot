@@ -3,7 +3,6 @@ import { ClerkProvider } from '@clerk/nextjs'
 export const metadata = {
   title: 'MailPilot — From notes to the perfect email',
   description: 'MailPilot — AI copilot that turns your bullet points into professional emails.',
-  manifest: '/manifest.webmanifest',
   icons: {
     icon: '/assets/logononame.png',
     apple: '/icons/icon-192.png',

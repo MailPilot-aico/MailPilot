@@ -1,18 +1,7 @@
 import { withSentryConfig } from "@sentry/nextjs";
 
 /** @type {import('next').NextConfig} */
-const nextConfig = {
-  async headers() {
-    return [
-      {
-        source: "/manifest.webmanifest",
-        headers: [
-          { key: "Content-Type", value: "application/manifest+json; charset=utf-8" },
-        ],
-      },
-    ];
-  },
-};
+const nextConfig = {};
 
 export default withSentryConfig(nextConfig, {
   // For all available options, see:

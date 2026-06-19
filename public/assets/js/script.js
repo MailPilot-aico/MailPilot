@@ -1009,6 +1009,27 @@ document.querySelectorAll('.btn--download').forEach((a) => {
   });
 });
 
+/* ---- PWA: „Als App installieren" (kein .exe → keine Windows-/SmartScreen-Warnung) ----
+   Der Browser feuert beforeinstallprompt, sobald die App installierbar ist. Dann
+   zeigen wir den Button; ein Klick öffnet den nativen Installations-Dialog. */
+let deferredInstallPrompt = null;
+const pwaInstallBtn = document.getElementById('pwaInstallBtn');
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  deferredInstallPrompt = e;
+  if (pwaInstallBtn) pwaInstallBtn.hidden = false;
+});
+if (pwaInstallBtn) {
+  pwaInstallBtn.addEventListener('click', async () => {
+    if (!deferredInstallPrompt) return;
+    deferredInstallPrompt.prompt();
+    try { await deferredInstallPrompt.userChoice; } catch {}
+    deferredInstallPrompt = null;
+    pwaInstallBtn.hidden = true;
+  });
+}
+window.addEventListener('appinstalled', () => { if (pwaInstallBtn) pwaInstallBtn.hidden = true; });
+
 /* ---- Theme initial anwenden (Buttons synchronisieren) ---- */
 applyTheme(getTheme());
 

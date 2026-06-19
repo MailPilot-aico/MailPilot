@@ -3,7 +3,12 @@ import { ClerkProvider } from '@clerk/nextjs'
 export const metadata = {
   title: 'MailPilot — From notes to the perfect email',
   description: 'MailPilot — AI copilot that turns your bullet points into professional emails.',
-  icons: { icon: '/assets/logononame.png' },
+  manifest: '/manifest.webmanifest',
+  icons: {
+    icon: '/assets/logononame.png',
+    apple: '/icons/icon-192.png',
+  },
+  appleWebApp: { capable: true, title: 'MailPilot', statusBarStyle: 'black-translucent' },
 }
 
 export default function RootLayout({ children }) {
@@ -26,6 +31,12 @@ export default function RootLayout({ children }) {
           />
           {/* Das bestehende MailPilot-Design, unverändert aus public/assets serviert */}
           <link rel="stylesheet" href="/assets/css/style.css" />
+          {/* Service Worker registrieren → macht MailPilot als App installierbar (PWA) */}
+          <script
+            dangerouslySetInnerHTML={{
+              __html: "if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('/sw.js').catch(function(){});});}",
+            }}
+          />
         </head>
         <body>{children}</body>
       </html>

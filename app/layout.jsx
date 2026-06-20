@@ -32,6 +32,10 @@ export default function RootLayout({ children }) {
             }}
           />
           <meta name="theme-color" content="#0a0710" />
+          {/* Älterer Apple-Tag (zusätzlich zum Next-generierten "mobile-web-app-capable"),
+              damit die installierte App auch auf iPhone/älterem Safari im eigenen Fenster
+              startet statt im Browser-Tab. */}
+          <meta name="apple-mobile-web-app-capable" content="yes" />
           <link rel="preconnect" href="https://fonts.googleapis.com" />
           <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
           <link

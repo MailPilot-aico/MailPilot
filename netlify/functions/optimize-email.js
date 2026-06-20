@@ -86,6 +86,20 @@ Regeln:
 - Fehlt eine konkrete Angabe (z. B. dein eigener Name), nutze einen neutralen Platzhalter in eckigen Klammern, etwa [Name] oder [Datum].
 - Gib ausschließlich die fertige Antwort-E-Mail aus – keine Einleitung, keine Erklärungen, keine Kommentare.`;
 
+// Verbessern-Modus (Schnell-Buttons „freundlicher/kürzer/…"): bestehende E-Mail überarbeiten.
+const REFINE_SYSTEM_PROMPT = `Du bist ein E-Mail-Copilot. Überarbeite die E-Mail des Nutzers gemäß seiner Anweisung. Behalte die SPRACHE der E-Mail bei. Ändere nur, was die Anweisung verlangt; bleibe inhaltlich treu und erfinde nichts. Gib ausschließlich die überarbeitete E-Mail aus – keinen Betreff, keine Erklärungen, keine Kommentare.`;
+
+// Betreffzeile aus der Modell-Antwort trennen (Format „BETREFF: …" als erste Zeile).
+function parseSubject(raw, wantSubject) {
+  let s = String(raw || "").trim();
+  let subject = "";
+  if (wantSubject) {
+    const m = s.match(/^\s*betreff:\s*(.+?)\s*(?:\n+|$)/i);
+    if (m) { subject = m[1].trim(); s = s.slice(m[0].length).trim(); }
+  }
+  return { subject, email: s };
+}
+
 // Unterstützte Zielsprachen für die Übersetzungsfunktion (Code → Sprachname für „ins …")
 const LANGS = {
   de: "Deutsche",
@@ -188,6 +202,22 @@ export const handler = async (event) => {
     }
   }
 
+  // ---- Verbessern-Modus (Schnell-Buttons): bestehende E-Mail überarbeiten (zählt NICHT) ----
+  const refine = String(body.refine ?? "").trim().slice(0, 300);
+  if (refine) {
+    try {
+      const message = await getClient().messages.create({
+        model: MODEL,
+        max_tokens: 3000,
+        system: REFINE_SYSTEM_PROMPT,
+        messages: [{ role: "user", content: `Anweisung: ${refine}\n\nE-Mail:\n${text}` }],
+      });
+      return resp(200, { email: extractText(message), remaining: Math.max(0, FREE_LIMIT - used) });
+    } catch (err) {
+      return apiError(err);
+    }
+  }
+
   // ---- Optimierungs-Modus: aus Notizen eine E-Mail erzeugen (zählt) ----
   // Tageslimit fälschungssicher prüfen.
   if (used >= FREE_LIMIT) {
@@ -204,18 +234,35 @@ export const handler = async (event) => {
     `Gewünschte Länge auf einer Skala von 0 (sehr kurz und knapp) bis 100 (sehr ausführlich und detailliert): ${length}.\n` +
     `Gewünschte Förmlichkeit auf einer Skala von 0 (sehr locker, Du-Form) bis 100 (sehr förmlich, Sie-Form): ${formality}.\n\n`;
 
+  // Optionale Extras: persönlicher Stil (4), Betreff (7), Varianten (6).
+  const style = String(body.style ?? "").trim().slice(0, 4000);
+  const wantSubject = body.subject === true;
+  const variants = Math.min(3, Math.max(1, parseInt(body.variants, 10) || 1));
+
   // Im Antwort-Modus die erhaltene E-Mail mitgeben und den Antwort-System-Prompt nutzen.
-  const userContent = replyTo
+  let userContent = replyTo
     ? controls +
       `Erhaltene E-Mail, auf die geantwortet werden soll:\n"""\n${replyTo}\n"""\n\n` +
       `Stichpunkte des Nutzers für die Antwort:\n${text}`
     : controls + `Notizen / Roher Entwurf:\n${text}`;
+  if (style) {
+    userContent += `\n\nSchreibe im persönlichen Stil dieser Beispiel-E-Mails des Nutzers (übernimm Ton, Wortwahl und typische Formulierungen, NICHT deren konkreten Inhalt):\n"""\n${style}\n"""`;
+  }
+
+  const subjectRule = wantSubject
+    ? `\n\nBeginne JEDE E-Mail mit einer eigenen Zeile im Format "BETREFF: <prägnante Betreffzeile>", danach eine Leerzeile, dann die eigentliche E-Mail.`
+    : "";
+  const variantsRule = variants > 1
+    ? `\n\nErzeuge ${variants} deutlich unterschiedliche Varianten der E-Mail. Trenne die Varianten durch eine eigene Zeile mit ausschließlich "#####". Keine Nummerierung, keine Kommentare.`
+    : "";
+  const system = (replyTo ? REPLY_SYSTEM_PROMPT : SYSTEM_PROMPT) + subjectRule + variantsRule;
 
   try {
+    const baseTokens = length >= 67 || replyTo ? 3000 : 2000;
     const message = await getClient().messages.create({
       model: MODEL,
-      max_tokens: length >= 67 || replyTo ? 3000 : 2000, // mehr Spielraum bei langer Mail / Antwort
-      system: replyTo ? REPLY_SYSTEM_PROMPT : SYSTEM_PROMPT,
+      max_tokens: Math.min(8000, baseTokens * variants), // mehr Spielraum für Varianten/lange Mails
+      system,
       messages: [{ role: "user", content: userContent }],
     });
 
@@ -223,7 +270,18 @@ export const handler = async (event) => {
     // sie dürfen das bereits erzeugte Ergebnis nicht zunichtemachen).
     await bumpUsed(key, used);
 
-    return resp(200, { email: extractText(message), remaining: Math.max(0, FREE_LIMIT - (used + 1)) });
+    const full = extractText(message);
+    const parts = variants > 1
+      ? full.split(/\n\s*#####\s*\n/).map((x) => x.trim()).filter(Boolean)
+      : [full];
+    const parsed = parts.map((p) => parseSubject(p, wantSubject));
+
+    const out = { email: parsed[0].email, remaining: Math.max(0, FREE_LIMIT - (used + 1)) };
+    if (wantSubject) out.subject = parsed[0].subject;
+    if (variants > 1 && parsed.length > 1) {
+      out.variants = parsed.map((p) => ({ subject: p.subject, email: p.email }));
+    }
+    return resp(200, out);
   } catch (err) {
     return apiError(err);
   }

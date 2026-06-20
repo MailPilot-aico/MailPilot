@@ -243,6 +243,159 @@ function getReplyTo() {
   });
 })();
 
+/* =========================================================
+   Erweiterte Features: Vorlagen, eigener Stil, Schnell-Buttons,
+   Varianten, Betreffzeile. Alles additiv – injiziert per JS.
+   ========================================================= */
+let resultVariants = [];   // [{ subject, email }]
+let currentVariant = 0;
+
+const STYLE_KEY = 'mp_style';
+function getStyle() { try { return (localStorage.getItem(STYLE_KEY) || '').trim(); } catch { return ''; } }
+function wantsVariants() { const c = document.getElementById('variantsToggle'); return !!(c && c.checked); }
+
+// Signatur in die E-Mail einsetzen (ersetzt [Name], sonst angehängt).
+function applySignature(email) {
+  const sig = getSignature();
+  if (sig && typeof email === 'string') {
+    const namePh = /\[(?:ihr |dein |your )?name\]/i;
+    return namePh.test(email) ? email.replace(namePh, sig) : email.replace(/\s+$/, '') + '\n' + sig;
+  }
+  return email;
+}
+
+// Betreffzeile anzeigen/verbergen.
+function setSubject(subject) {
+  const row = document.getElementById('subjectRow');
+  const field = document.getElementById('subjectField');
+  if (!row || !field) return;
+  const s = (subject || '').trim();
+  field.value = s;
+  row.hidden = !s;
+}
+
+// Eine Variante (Signatur + Betreff + ggf. Übersetzung) ins Ausgabefeld bringen.
+async function showResult(rawEmail, subject, doTranslate) {
+  const email = applySignature(rawEmail);
+  output.value = email;
+  output.classList.remove('is-example');
+  hasRealResult = true;
+  baseResultText = email;
+  outputLang = 'de';
+  outputLangManual = false;
+  updateTranslateUI();
+  copyBtn.disabled = false;
+  setSubject(subject);
+  if (doTranslate) await applyDefaultTranslation();
+}
+
+// Varianten-Umschalter (Variante 1 / 2 / …) rendern.
+function renderVariantSwitcher() {
+  const row = document.getElementById('variantRow');
+  if (!row) return;
+  if (resultVariants.length > 1) {
+    row.innerHTML = resultVariants.map((v, i) =>
+      '<button type="button" class="variant-btn' + (i === currentVariant ? ' is-active' : '') + '" data-vi="' + i + '">' + escapeHtml(t('variant_label')) + ' ' + (i + 1) + '</button>').join('');
+    row.hidden = false;
+    row.querySelectorAll('.variant-btn').forEach((b) => b.addEventListener('click', () => {
+      currentVariant = +b.dataset.vi;
+      renderVariantSwitcher();
+      const v = resultVariants[currentVariant];
+      showResult(v.email, v.subject, false);
+    }));
+  } else { row.hidden = true; row.innerHTML = ''; }
+}
+
+function setRefineEnabled(on) { document.querySelectorAll('.refine-btn').forEach((b) => { b.disabled = !on; }); }
+
+// Schnell-Button: bestehende E-Mail gemäß Anweisung überarbeiten (zählt nicht gegen das Limit).
+async function doRefine(instr) {
+  if (!hasRealResult || !output.value) return;
+  if (!currentUser) { openAuthModal('login'); return; }
+  setRefineEnabled(false);
+  setLoading(true);
+  setStatus(t('st_optimizing'), 'busy');
+  try {
+    const result = await generateEmail(output.value, activeTone, activeLength, activeFormality, { refine: instr });
+    if (result.needLogin) { openAuthModal('login'); setStatus(t('st_signin'), 'warn'); return; }
+    if (result.limitReached) { setRemaining(0); openAuthModal('upgrade'); setStatus(t('st_limit'), 'warn'); return; }
+    if (resultVariants[currentVariant]) resultVariants[currentVariant].email = result.email;
+    const sub = resultVariants[currentVariant] ? resultVariants[currentVariant].subject : '';
+    await showResult(result.email, sub, false);
+    setStatus(result.source === 'api' ? t('st_ready') : t('st_demo'), result.source === 'api' ? 'ok' : 'warn');
+    if (typeof result.remaining === 'number') setRemaining(result.remaining);
+  } catch (e) { console.error(e); setStatus(t('st_error'), 'error'); }
+  finally { setRefineEnabled(true); setLoading(false); }
+}
+
+const REFINE_ACTIONS = [
+  { key: 'refine_friendly',  instr: 'Mach die E-Mail freundlicher und wärmer, ohne den Inhalt zu ändern.' },
+  { key: 'refine_shorter',   instr: 'Fasse die E-Mail deutlich kürzer und prägnanter.' },
+  { key: 'refine_formal',    instr: 'Mach die E-Mail förmlicher und höflicher (Sie-Form).' },
+  { key: 'refine_assertive', instr: 'Formuliere die E-Mail bestimmter und selbstbewusster.' },
+];
+
+const TEMPLATES = {
+  de: [
+    { id: 'angebot',     label: 'Angebot',     body: 'Angebot für [Produkt/Leistung]\nPreis: [X] €\nLieferzeit: [X] Tage\ngültig bis [Datum]' },
+    { id: 'termin',      label: 'Termin',      body: 'Terminvorschlag für [Anlass]\nDatum: [Datum] um [Uhrzeit]\nOrt: [Ort/Online]\nbitte um kurze Bestätigung' },
+    { id: 'absage',      label: 'Absage',      body: 'Leider Absage zu [Anfrage/Bewerbung]\nGrund: [kurz]\nDank für das Interesse' },
+    { id: 'nachfassen',  label: 'Nachfassen',  body: 'freundlich nachfassen zu [Thema/Angebot vom Datum]\nsind noch Fragen offen?\nbitte um kurze Rückmeldung' },
+    { id: 'reklamation', label: 'Reklamation', body: 'Reklamation zu [Produkt/Bestellung Nr.]\nProblem: [kurze Beschreibung]\ngewünschte Lösung: [Ersatz/Erstattung]' },
+  ],
+  en: [
+    { id: 'angebot',     label: 'Quote',     body: 'Quote for [product/service]\nPrice: [X]\nDelivery time: [X] days\nvalid until [date]' },
+    { id: 'termin',      label: 'Meeting',   body: 'Proposed meeting for [topic]\nDate: [date] at [time]\nLocation: [place/online]\nplease confirm' },
+    { id: 'absage',      label: 'Decline',   body: 'Unfortunately declining [request/application]\nReason: [brief]\nthank you for your interest' },
+    { id: 'nachfassen',  label: 'Follow-up', body: 'friendly follow-up on [topic/quote from date]\nany open questions?\nlooking forward to your reply' },
+    { id: 'reklamation', label: 'Complaint', body: 'Complaint about [product/order no.]\nIssue: [brief]\ndesired resolution: [replacement/refund]' },
+  ],
+};
+
+// Vorlagen-Chips über das Notizfeld injizieren.
+(function setupTemplates() {
+  if (!input) return;
+  const list = TEMPLATES[lang] || TEMPLATES.en;
+  const chips = list.map((tp) => '<button type="button" class="tpl-chip" data-tpl="' + tp.id + '">' + escapeHtml(tp.label) + '</button>').join('');
+  const row = htmlToEl('<div class="tpl-row" id="tplRow" role="group" aria-label="' + escapeHtml(t('tpl_label')) + '"><span class="tpl-row__label" data-i18n="tpl_label">' + escapeHtml(t('tpl_label')) + '</span><div class="tpl-row__chips">' + chips + '</div></div>');
+  const anchor = document.getElementById('replyBox') || input;
+  anchor.insertAdjacentElement('beforebegin', row);
+  row.querySelectorAll('.tpl-chip').forEach((b) => b.addEventListener('click', () => {
+    const tp = list.find((x) => x.id === b.dataset.tpl);
+    if (!tp) return;
+    input.value = tp.body;
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    input.focus();
+  }));
+})();
+
+// „Mehrere Varianten"-Schalter direkt über dem Notizfeld.
+(function setupVariantsToggle() {
+  if (!input) return;
+  const box = htmlToEl('<label class="opt-check" id="variantsBox"><input type="checkbox" id="variantsToggle" /><span data-i18n="variants_toggle">' + escapeHtml(t('variants_toggle')) + '</span></label>');
+  input.insertAdjacentElement('beforebegin', box);
+})();
+
+// Betreff-Zeile + Varianten-Umschalter (über der Ausgabe) und Schnell-Buttons (darunter) injizieren.
+(function setupResultControls() {
+  if (!output) return;
+  const variantRow = htmlToEl('<div class="variant-row" id="variantRow" hidden></div>');
+  const subjectRow = htmlToEl('<div class="subject-row" id="subjectRow" hidden><span class="subject-row__label" data-i18n="subject_label">' + escapeHtml(t('subject_label')) + '</span><input type="text" id="subjectField" class="subject-row__field" readonly /><button type="button" class="subject-row__copy" id="subjectCopy" aria-label="Copy"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button></div>');
+  output.insertAdjacentElement('beforebegin', variantRow);
+  output.insertAdjacentElement('beforebegin', subjectRow);
+  const refineBtns = REFINE_ACTIONS.map((a) => '<button type="button" class="refine-btn" data-i18n="' + a.key + '" data-instr="' + escapeHtml(a.instr) + '" disabled>' + escapeHtml(t(a.key)) + '</button>').join('');
+  const refineRow = htmlToEl('<div class="refine-row" id="refineRow">' + refineBtns + '</div>');
+  output.insertAdjacentElement('afterend', refineRow);
+  refineRow.querySelectorAll('.refine-btn').forEach((b) => b.addEventListener('click', () => doRefine(b.dataset.instr)));
+  const sc = subjectRow.querySelector('#subjectCopy');
+  if (sc) sc.addEventListener('click', async () => {
+    const f = document.getElementById('subjectField');
+    if (!f || !f.value) return;
+    try { await navigator.clipboard.writeText(f.value); } catch {}
+    sc.classList.add('is-copied'); setTimeout(() => sc.classList.remove('is-copied'), 1500);
+  });
+})();
+
 /* ---- Tonfall-Auswahl ---- */
 tonePills.forEach((pill) => {
   pill.addEventListener('click', () => {
@@ -299,34 +452,27 @@ async function runOptimize() {
   setStatus(t('st_optimizing'), 'busy');
 
   try {
-    const result = await generateEmail(text, activeTone, activeLength, activeFormality, { replyTo: getReplyTo() });
+    const result = await generateEmail(text, activeTone, activeLength, activeFormality, {
+      replyTo: getReplyTo(),
+      subject: true,                       // Betreffzeile (7)
+      style: getStyle(),                   // eigener Stil (4)
+      variants: wantsVariants() ? 2 : 1,   // mehrere Varianten (6)
+    });
 
     if (result.needLogin) { openAuthModal('login'); setStatus(t('st_signin'), 'warn'); return; }
     if (result.limitReached) { setRemaining(0); openAuthModal('upgrade'); setStatus(t('st_limit'), 'warn'); return; }
 
-    // Signatur (falls in den Einstellungen hinterlegt) einsetzen: ersetzt den
-    // [Name]-Platzhalter, sonst ans Ende angehängt.
-    let email = result.email;
-    const sig = getSignature();
-    if (sig && typeof email === 'string') {
-      const namePh = /\[(?:ihr |dein |your )?name\]/i;
-      email = namePh.test(email) ? email.replace(namePh, sig) : email.replace(/\s+$/, '') + '\n' + sig;
-    }
-
-    output.value = email;
-    output.classList.remove('is-example');
-    hasRealResult = true;
-    baseResultText = email;   // Original als Quelle für spätere Übersetzungen
-    outputLang = 'de';               // Backend erzeugt deutsche E-Mails
-    outputLangManual = false;        // Übersetzen-Auswahl für das neue Ergebnis zurücksetzen
-    updateTranslateUI();
-    copyBtn.disabled = false;
+    // Ergebnis als eine oder mehrere Varianten aufbereiten (jede mit eigenem Betreff).
+    resultVariants = (result.variants && result.variants.length > 1)
+      ? result.variants
+      : [{ subject: result.subject || '', email: result.email }];
+    currentVariant = 0;
+    renderVariantSwitcher();
     setStatus(result.source === 'api' ? t('st_ready') : t('st_demo'), result.source === 'api' ? 'ok' : 'warn');
     if (typeof result.remaining === 'number') setRemaining(result.remaining);
-    // Standardmäßig die oben eingestellte Sprache verwenden: das echte Ergebnis
-    // automatisch in die Standardsprache übersetzen (kein extra Klick auf
-    // „Übersetzen" nötig). Im Demo-Modus bleibt der Beispieltext deutsch.
-    if (result.source === 'api') await applyDefaultTranslation();
+    // Erste Variante anzeigen (Signatur einsetzen + ggf. in die Standardsprache übersetzen).
+    await showResult(resultVariants[0].email, resultVariants[0].subject, result.source === 'api');
+    setRefineEnabled(true);
   } catch (err) {
     console.error(err);
     setStatus(t('st_error'), 'error');
@@ -401,7 +547,13 @@ async function generateEmail(text, tone, length, formality, opts) {
   const payload = { text, tone };
   if (typeof length === 'number')    payload.length = length;
   if (typeof formality === 'number') payload.formality = formality;
-  if (opts && opts.replyTo)          payload.replyTo = opts.replyTo;   // Antwort-Modus
+  if (opts) {
+    if (opts.replyTo)                       payload.replyTo  = opts.replyTo;   // Antwort-Modus
+    if (opts.refine)                        payload.refine   = opts.refine;    // Schnell-Buttons
+    if (opts.style)                         payload.style    = opts.style;     // eigener Stil
+    if (opts.subject)                       payload.subject  = true;           // Betreffzeile
+    if (opts.variants && opts.variants > 1) payload.variants = opts.variants;  // Varianten
+  }
 
   let res;
   try {
@@ -427,7 +579,7 @@ async function generateEmail(text, tone, length, formality, opts) {
   }
 
   const data = await res.json();
-  return { email: data.email, source: 'api', remaining: data.remaining };
+  return { email: data.email, subject: data.subject, variants: data.variants, source: 'api', remaining: data.remaining };
 }
 
 /* Einfache, lokale Aufbereitung als Platzhalter für die echte KI */
@@ -871,6 +1023,10 @@ const SET_EN = {
   dl_unavailable: 'The download isn’t available yet — it launches soon. Questions? info@mailpilot-ai.com',
   set_signature: 'Signature', set_signature_ph: 'e.g. Kind regards, Hans Müller, Example Ltd.',
   set_signature_hint: 'Replaces [Name] in the email, otherwise added at the end.',
+  set_style: 'My style', set_style_ph: 'Paste 1–3 of your own emails here. MailPilot will match your tone.',
+  set_style_hint: 'Optional — emails are then written in your personal style.',
+  tpl_label: 'Templates', variants_toggle: 'Generate 2 variants', variant_label: 'Variant', subject_label: 'Subject',
+  refine_friendly: 'friendlier', refine_shorter: 'shorter', refine_formal: 'more formal', refine_assertive: 'more assertive',
 };
 const SET_DE = {
   set_open: 'Einstellungen', set_title: 'Einstellungen',
@@ -891,6 +1047,10 @@ const SET_DE = {
   dl_unavailable: 'Der Download ist noch nicht verfügbar — Start in Kürze. Fragen? info@mailpilot-ai.com',
   set_signature: 'Signatur', set_signature_ph: 'z. B. Mit freundlichen Grüßen, Hans Müller, Musterfirma GmbH',
   set_signature_hint: 'Ersetzt [Name] in der E-Mail, sonst wird sie ans Ende gesetzt.',
+  set_style: 'Mein Stil', set_style_ph: 'Füge hier 1–3 eigene E-Mails ein. MailPilot übernimmt deinen Ton.',
+  set_style_hint: 'Optional — E-Mails werden dann in deinem persönlichen Stil geschrieben.',
+  tpl_label: 'Vorlagen', variants_toggle: '2 Varianten erzeugen', variant_label: 'Variante', subject_label: 'Betreff',
+  refine_friendly: 'freundlicher', refine_shorter: 'kürzer', refine_formal: 'förmlicher', refine_assertive: 'bestimmter',
 };
 if (typeof I18N !== 'undefined') { Object.assign(I18N.en, SET_EN); Object.assign(I18N.de, SET_DE); }
 
@@ -954,6 +1114,11 @@ const settingsModal = htmlToEl(`
         <textarea id="setSignature" class="set-sign" rows="3" data-i18n-ph="set_signature_ph" placeholder="Mit freundlichen Grüßen, …"></textarea>
         <p class="set-hint" data-i18n="set_signature_hint">Appended to the end of each generated email.</p>
       </section>
+      <section class="set-section">
+        <div class="set-section__title" data-i18n="set_style">My style</div>
+        <textarea id="setStyle" class="set-sign" rows="4" data-i18n-ph="set_style_ph" placeholder="Paste 1–3 of your own emails …"></textarea>
+        <p class="set-hint" data-i18n="set_style_hint">Optional — emails are written in your personal style.</p>
+      </section>
     </div>
   </div>`);
 document.body.appendChild(settingsModal);
@@ -963,6 +1128,11 @@ const sigField = document.getElementById('setSignature');
 if (sigField) {
   sigField.value = getSignature();
   sigField.addEventListener('input', () => { try { localStorage.setItem(SIG_KEY, sigField.value); } catch {} });
+}
+const styleField = document.getElementById('setStyle');
+if (styleField) {
+  styleField.value = getStyle();
+  styleField.addEventListener('input', () => { try { localStorage.setItem(STYLE_KEY, styleField.value); } catch {} });
 }
 
 // Zahnrad öffnet das Panel und lädt Konto + Abo frisch.

@@ -1013,6 +1013,20 @@ async function relatedAppInstalled() {
   return false;
 }
 
+// Wählt die passende Install-Anleitung je nach Browser/Gerät, falls der direkte
+// Dialog nicht verfügbar ist (Safari/iPhone/Firefox brauchen eigene Schritte).
+function installHintKey() {
+  const ua = navigator.userAgent || '';
+  const isIOS = /iphone|ipad|ipod/i.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const isFirefox = /firefox|fxios/i.test(ua);
+  const isChromium = /chrome|chromium|crios|edg/i.test(ua);
+  const isSafari = /safari/i.test(ua) && !isChromium && !isFirefox;
+  if (isIOS) return 'install_hint_ios';
+  if (isFirefox) return 'install_hint_firefox';
+  if (isSafari) return 'install_hint_mac';
+  return 'install_hint';
+}
+
 async function doPwaInstall() {
   // Zum Klick-Zeitpunkt erneut aus dem globalen Speicher holen (Event kann spät kommen).
   const promptEvent = deferredInstallPrompt || window.__mpInstallPrompt;
@@ -1028,7 +1042,7 @@ async function doPwaInstall() {
     installButtons.forEach((b) => { b.hidden = true; });
     toast(t('install_done'), 'ok');           // bereits installiert → freundlicher Hinweis
   } else {
-    toast(t('install_hint'));                 // Browser ohne Install-Dialog (z. B. Firefox) → neutrale Anleitung
+    toast(t(installHintKey()));               // Browser ohne Dialog → passende Anleitung je Gerät (Win/Mac/iPhone/Firefox)
   }
 }
 

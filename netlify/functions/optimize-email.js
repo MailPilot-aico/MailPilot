@@ -74,6 +74,18 @@ Regeln:
 - Fasse dich angemessen kurz und komm auf den Punkt.
 - Gib ausschließlich die fertige E-Mail aus – keine Einleitung, keine Erklärungen, keine Kommentare, keine Auswahlmöglichkeiten.`;
 
+// Antwort-Modus: Der Nutzer hat eine E-Mail ERHALTEN und möchte darauf antworten.
+const REPLY_SYSTEM_PROMPT = `Du bist ein E-Mail-Copilot. Der Nutzer hat eine E-Mail erhalten und möchte darauf antworten. Aus der erhaltenen E-Mail und den Stichpunkten des Nutzers formulierst du eine passende, fertige deutsche Antwort-E-Mail.
+
+Regeln:
+- Beziehe dich inhaltlich auf die erhaltene E-Mail und beantworte sie sinnvoll und vollständig.
+- Wenn der Name des Absenders aus der erhaltenen E-Mail hervorgeht, verwende ihn in der Anrede.
+- Schreibe die Antwort vollständig aus: passende Anrede, klar strukturierter Fließtext und passende Grußformel.
+- Halte den gewünschten Tonfall durchgängig ein.
+- Bleibe inhaltlich bei dem, was der Nutzer in den Stichpunkten vorgibt. Erfinde keine Fakten, Namen, Termine oder Zusagen.
+- Fehlt eine konkrete Angabe (z. B. dein eigener Name), nutze einen neutralen Platzhalter in eckigen Klammern, etwa [Name] oder [Datum].
+- Gib ausschließlich die fertige Antwort-E-Mail aus – keine Einleitung, keine Erklärungen, keine Kommentare.`;
+
 // Unterstützte Zielsprachen für die Übersetzungsfunktion (Code → Sprachname für „ins …")
 const LANGS = {
   de: "Deutsche",
@@ -148,6 +160,8 @@ export const handler = async (event) => {
 
   const text = String(body.text ?? "").trim();
   const targetLang = typeof body.targetLang === "string" ? body.targetLang.trim() : "";
+  // Antwort-Modus (optional): die erhaltene E-Mail, auf die geantwortet werden soll.
+  const replyTo = String(body.replyTo ?? "").trim().slice(0, 8000);
 
   if (!text) {
     return resp(400, { error: "Es wurden keine Notizen übergeben." });
@@ -184,21 +198,25 @@ export const handler = async (event) => {
   const length = clampScale(body.length);       // 0 = sehr kurz … 100 = sehr ausführlich
   const formality = clampScale(body.formality);  // 0 = sehr locker … 100 = sehr förmlich
 
+  // Gemeinsamer Steuer-Block (Tonfall/Länge/Förmlichkeit) für beide Modi.
+  const controls =
+    `Gewünschter Tonfall: ${TONES[tone]}.\n` +
+    `Gewünschte Länge auf einer Skala von 0 (sehr kurz und knapp) bis 100 (sehr ausführlich und detailliert): ${length}.\n` +
+    `Gewünschte Förmlichkeit auf einer Skala von 0 (sehr locker, Du-Form) bis 100 (sehr förmlich, Sie-Form): ${formality}.\n\n`;
+
+  // Im Antwort-Modus die erhaltene E-Mail mitgeben und den Antwort-System-Prompt nutzen.
+  const userContent = replyTo
+    ? controls +
+      `Erhaltene E-Mail, auf die geantwortet werden soll:\n"""\n${replyTo}\n"""\n\n` +
+      `Stichpunkte des Nutzers für die Antwort:\n${text}`
+    : controls + `Notizen / Roher Entwurf:\n${text}`;
+
   try {
     const message = await getClient().messages.create({
       model: MODEL,
-      max_tokens: length >= 67 ? 3000 : 2000, // bei hoher „Länge" etwas mehr Spielraum
-      system: SYSTEM_PROMPT,
-      messages: [
-        {
-          role: "user",
-          content:
-            `Gewünschter Tonfall: ${TONES[tone]}.\n` +
-            `Gewünschte Länge auf einer Skala von 0 (sehr kurz und knapp) bis 100 (sehr ausführlich und detailliert): ${length}.\n` +
-            `Gewünschte Förmlichkeit auf einer Skala von 0 (sehr locker, Du-Form) bis 100 (sehr förmlich, Sie-Form): ${formality}.\n\n` +
-            `Notizen / Roher Entwurf:\n${text}`,
-        },
-      ],
+      max_tokens: length >= 67 || replyTo ? 3000 : 2000, // mehr Spielraum bei langer Mail / Antwort
+      system: replyTo ? REPLY_SYSTEM_PROMPT : SYSTEM_PROMPT,
+      messages: [{ role: "user", content: userContent }],
     });
 
     // Verbrauch erst nach Erfolg hochzählen (Blobs-Fehler werden geschluckt –

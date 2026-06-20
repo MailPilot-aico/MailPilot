@@ -217,6 +217,32 @@ input.addEventListener('input', updateCharCount);
   });
 })();
 
+/* ---- Antwort-Modus + Signatur (Helfer) ---- */
+const SIG_KEY = 'mp_signature';
+function getSignature() { try { return (localStorage.getItem(SIG_KEY) || '').trim(); } catch { return ''; } }
+function getReplyTo() {
+  const tg = document.getElementById('replyToggle');
+  const fl = document.getElementById('replyInput');
+  return (tg && tg.checked && fl) ? fl.value.trim() : '';
+}
+// „Auf eine E-Mail antworten"-Block über das Notizfeld injizieren (Markup unberührt).
+(function setupReplyMode() {
+  if (!input) return;
+  const box = htmlToEl(`
+    <div class="reply-box" id="replyBox">
+      <label class="reply-box__toggle"><input type="checkbox" id="replyToggle" /><span data-i18n="reply_toggle">${escapeHtml(t('reply_toggle'))}</span></label>
+      <textarea id="replyInput" class="reply-box__field" rows="4" data-i18n-ph="reply_ph" placeholder="${escapeHtml(t('reply_ph'))}" hidden></textarea>
+    </div>`);
+  input.insertAdjacentElement('beforebegin', box);
+  const tg = box.querySelector('#replyToggle');
+  const fl = box.querySelector('#replyInput');
+  tg.addEventListener('change', () => {
+    fl.hidden = !tg.checked;
+    box.classList.toggle('is-open', tg.checked);
+    if (tg.checked) fl.focus();
+  });
+})();
+
 /* ---- Tonfall-Auswahl ---- */
 tonePills.forEach((pill) => {
   pill.addEventListener('click', () => {
@@ -273,15 +299,24 @@ async function runOptimize() {
   setStatus(t('st_optimizing'), 'busy');
 
   try {
-    const result = await generateEmail(text, activeTone, activeLength, activeFormality);
+    const result = await generateEmail(text, activeTone, activeLength, activeFormality, { replyTo: getReplyTo() });
 
     if (result.needLogin) { openAuthModal('login'); setStatus(t('st_signin'), 'warn'); return; }
     if (result.limitReached) { setRemaining(0); openAuthModal('upgrade'); setStatus(t('st_limit'), 'warn'); return; }
 
-    output.value = result.email;
+    // Signatur (falls in den Einstellungen hinterlegt) einsetzen: ersetzt den
+    // [Name]-Platzhalter, sonst ans Ende angehängt.
+    let email = result.email;
+    const sig = getSignature();
+    if (sig && typeof email === 'string') {
+      const namePh = /\[(?:ihr |dein |your )?name\]/i;
+      email = namePh.test(email) ? email.replace(namePh, sig) : email.replace(/\s+$/, '') + '\n' + sig;
+    }
+
+    output.value = email;
     output.classList.remove('is-example');
     hasRealResult = true;
-    baseResultText = result.email;   // Original als Quelle für spätere Übersetzungen
+    baseResultText = email;   // Original als Quelle für spätere Übersetzungen
     outputLang = 'de';               // Backend erzeugt deutsche E-Mails
     outputLangManual = false;        // Übersetzen-Auswahl für das neue Ergebnis zurücksetzen
     updateTranslateUI();
@@ -352,7 +387,7 @@ function apiRoot() {
 const API_BASE     = apiRoot();
 const API_ENDPOINT = API_BASE + '/.netlify/functions/optimize-email';
 
-async function generateEmail(text, tone, length, formality) {
+async function generateEmail(text, tone, length, formality, opts) {
   // Identity-Token mitschicken – das Backend identifiziert den Nutzer darüber
   // und zählt das Tageslimit fälschungssicher serverseitig.
   const headers = { 'Content-Type': 'application/json' };
@@ -366,6 +401,7 @@ async function generateEmail(text, tone, length, formality) {
   const payload = { text, tone };
   if (typeof length === 'number')    payload.length = length;
   if (typeof formality === 'number') payload.formality = formality;
+  if (opts && opts.replyTo)          payload.replyTo = opts.replyTo;   // Antwort-Modus
 
   let res;
   try {
@@ -833,6 +869,8 @@ const SET_EN = {
   set_month: 'monthly', set_year: 'yearly',
   dl_checking: 'Preparing…',
   dl_unavailable: 'The download isn’t available yet — it launches soon. Questions? info@mailpilot-ai.com',
+  set_signature: 'Signature', set_signature_ph: 'e.g. Kind regards, Hans Müller, Example Ltd.',
+  set_signature_hint: 'Replaces [Name] in the email, otherwise added at the end.',
 };
 const SET_DE = {
   set_open: 'Einstellungen', set_title: 'Einstellungen',
@@ -851,6 +889,8 @@ const SET_DE = {
   set_month: 'monatlich', set_year: 'jährlich',
   dl_checking: 'Wird vorbereitet…',
   dl_unavailable: 'Der Download ist noch nicht verfügbar — Start in Kürze. Fragen? info@mailpilot-ai.com',
+  set_signature: 'Signatur', set_signature_ph: 'z. B. Mit freundlichen Grüßen, Hans Müller, Musterfirma GmbH',
+  set_signature_hint: 'Ersetzt [Name] in der E-Mail, sonst wird sie ans Ende gesetzt.',
 };
 if (typeof I18N !== 'undefined') { Object.assign(I18N.en, SET_EN); Object.assign(I18N.de, SET_DE); }
 
@@ -909,9 +949,21 @@ const settingsModal = htmlToEl(`
         <div class="set-section__title" data-i18n="set_subscription">Subscription</div>
         <div id="setSubBody"></div>
       </section>
+      <section class="set-section">
+        <div class="set-section__title" data-i18n="set_signature">Signature</div>
+        <textarea id="setSignature" class="set-sign" rows="3" data-i18n-ph="set_signature_ph" placeholder="Mit freundlichen Grüßen, …"></textarea>
+        <p class="set-hint" data-i18n="set_signature_hint">Appended to the end of each generated email.</p>
+      </section>
     </div>
   </div>`);
 document.body.appendChild(settingsModal);
+
+// Signatur laden + bei jeder Änderung sofort speichern (localStorage).
+const sigField = document.getElementById('setSignature');
+if (sigField) {
+  sigField.value = getSignature();
+  sigField.addEventListener('input', () => { try { localStorage.setItem(SIG_KEY, sigField.value); } catch {} });
+}
 
 // Zahnrad öffnet das Panel und lädt Konto + Abo frisch.
 gearBtn.addEventListener('click', () => { renderSettingsAccount(); renderSubscription(); openModal(settingsModal); });

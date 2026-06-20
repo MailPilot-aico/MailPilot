@@ -978,35 +978,52 @@ async function openPortal(btn) {
   } finally { btn.disabled = false; btn.textContent = orig; }
 }
 
-/* ---- App-Installation (PWA): „Für Windows", „Für Mac" UND „Als App installieren" ----
-   Alle drei Buttons lösen denselben warnungsfreien Browser-Install aus (kein .exe/.dmg,
-   daher keine SmartScreen-Warnung). Die früheren Download-Links werden neutralisiert. */
-let deferredInstallPrompt = null;
+/* ---- „Als App installieren" (PWA) über die Hero-Buttons „Für Windows" / „Für Mac" ----
+   Beide Buttons lösen denselben warnungsfreien Browser-Install aus – KEIN .exe/.dmg-
+   Download, daher KEINE SmartScreen-/Gatekeeper-Warnung und KEIN Code-Signing-Zertifikat
+   nötig. Funktioniert auf Windows UND macOS (Edge/Chrome, auf dem Mac auch Safari).
+   Das Design bleibt unverändert – die zwei vorhandenen Buttons werden nur umgehängt.
+   Das beforeinstallprompt-Event wird bereits früh im <head> (layout.jsx) in
+   window.__mpInstallPrompt zwischengespeichert, damit es nicht verloren geht. */
+let deferredInstallPrompt = window.__mpInstallPrompt || null;
 const installButtons = [
   document.getElementById('pwaInstallBtn'),
   ...document.querySelectorAll('.btn--download'),
 ].filter(Boolean);
 
+// Läuft MailPilot bereits als installierte App? Dann sind die Buttons sinnlos → ausblenden.
+function isPwaInstalled() {
+  try {
+    return window.__mpInstalled === true
+      || window.navigator.standalone === true
+      || window.matchMedia('(display-mode: standalone)').matches;
+  } catch { return false; }
+}
+if (isPwaInstalled()) { installButtons.forEach((b) => { b.hidden = true; }); }
+
 async function doPwaInstall() {
-  if (deferredInstallPrompt) {
-    deferredInstallPrompt.prompt();
-    try { await deferredInstallPrompt.userChoice; } catch {}
-    deferredInstallPrompt = null;
+  // Zum Klick-Zeitpunkt erneut aus dem globalen Speicher holen (Event kann spät kommen).
+  const promptEvent = deferredInstallPrompt || window.__mpInstallPrompt;
+  if (promptEvent) {
+    promptEvent.prompt();
+    try { await promptEvent.userChoice; } catch {}
+    deferredInstallPrompt = null; window.__mpInstallPrompt = null;
     installButtons.forEach((b) => { b.hidden = true; });
+  } else if (isPwaInstalled()) {
+    toast(t('install_done'), 'ok');           // bereits installiert → freundlicher Hinweis
   } else {
-    // Browser bietet (noch) keinen direkten Dialog → kurze Anleitung anzeigen.
-    toast(t('install_hint'), 'warn');
+    toast(t('install_hint'));                 // Browser ohne Install-Dialog (z. B. Firefox) → neutrale Anleitung
   }
 }
 
 installButtons.forEach((btn) => {
-  btn.removeAttribute('href');      // alte .exe/.dmg-Verlinkung entfernen
+  btn.removeAttribute('href');      // .exe/.dmg-Download entfernen → stattdessen PWA-Install (warnungsfrei)
   btn.removeAttribute('download');
   btn.addEventListener('click', (e) => { e.preventDefault(); doPwaInstall(); });
 });
 
-window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); deferredInstallPrompt = e; });
-window.addEventListener('appinstalled', () => { installButtons.forEach((b) => { b.hidden = true; }); });
+window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); deferredInstallPrompt = e; window.__mpInstallPrompt = e; });
+window.addEventListener('appinstalled', () => { deferredInstallPrompt = null; window.__mpInstallPrompt = null; window.__mpInstalled = true; installButtons.forEach((b) => { b.hidden = true; }); });
 
 /* ---- Theme initial anwenden (Buttons synchronisieren) ---- */
 applyTheme(getTheme());

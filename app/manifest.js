@@ -12,6 +12,13 @@ export default function manifest() {
     background_color: '#0a0710',
     theme_color: '#0a0710',
     lang: 'de',
+    // Selbst-Referenz, damit navigator.getInstalledRelatedApps() erkennt, ob die
+    // PWA bereits installiert ist (→ dann „bereits installiert"-Hinweis statt
+    // verwirrender Install-Anleitung).
+    prefer_related_applications: false,
+    related_applications: [
+      { platform: 'webapp', url: 'https://mailpilot-ai.com/manifest.webmanifest' },
+    ],
     icons: [
       { src: '/icons/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
       { src: '/icons/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },

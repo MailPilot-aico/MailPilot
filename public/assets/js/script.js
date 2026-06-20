@@ -1001,6 +1001,18 @@ function isPwaInstalled() {
 }
 if (isPwaInstalled()) { installButtons.forEach((b) => { b.hidden = true; }); }
 
+// Erkennt eine bereits installierte MailPilot-PWA auch aus einem normalen Tab
+// (über die Manifest-Selbst-Referenz in app/manifest.js). Nur Chromium kann das.
+async function relatedAppInstalled() {
+  try {
+    if (navigator.getInstalledRelatedApps) {
+      const apps = await navigator.getInstalledRelatedApps();
+      return Array.isArray(apps) && apps.length > 0;
+    }
+  } catch {}
+  return false;
+}
+
 async function doPwaInstall() {
   // Zum Klick-Zeitpunkt erneut aus dem globalen Speicher holen (Event kann spät kommen).
   const promptEvent = deferredInstallPrompt || window.__mpInstallPrompt;
@@ -1009,7 +1021,11 @@ async function doPwaInstall() {
     try { await promptEvent.userChoice; } catch {}
     deferredInstallPrompt = null; window.__mpInstallPrompt = null;
     installButtons.forEach((b) => { b.hidden = true; });
-  } else if (isPwaInstalled()) {
+    return;
+  }
+  // Kein Install-Dialog verfügbar → entweder schon installiert ODER Browser ohne Support.
+  if (isPwaInstalled() || await relatedAppInstalled()) {
+    installButtons.forEach((b) => { b.hidden = true; });
     toast(t('install_done'), 'ok');           // bereits installiert → freundlicher Hinweis
   } else {
     toast(t('install_hint'));                 // Browser ohne Install-Dialog (z. B. Firefox) → neutrale Anleitung

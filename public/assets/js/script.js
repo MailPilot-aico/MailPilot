@@ -158,6 +158,65 @@ function updateCharCount() {
 }
 input.addEventListener('input', updateCharCount);
 
+/* ---- Spracheingabe / Diktat: reinsprechen statt tippen ----
+   Nutzt die Web Speech API (Edge/Chrome; Firefox unterstützt sie nicht). Das
+   Gesprochene wird ans Notizfeld angehängt, in der aktuell gewählten Sprache. */
+(function setupVoiceInput() {
+  if (!charCount || !input) return;
+  const header = charCount.closest('.panel__header');
+  if (!header) return;
+
+  const micBtn = htmlToEl(`
+    <button type="button" class="mic-btn" id="micBtn" title="${t('voice_btn')}" aria-label="${t('voice_btn')}">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 11a7 7 0 0 1-14 0"/><line x1="12" y1="18" x2="12" y2="22"/></svg>
+      <span class="mic-btn__label" data-i18n="voice_btn">${t('voice_btn')}</span>
+    </button>`);
+
+  // Mikro + Zeichenzähler rechts gruppieren (Header ist space-between).
+  const rightGroup = document.createElement('div');
+  rightGroup.className = 'panel__head-right';
+  header.insertBefore(rightGroup, charCount);
+  rightGroup.appendChild(micBtn);
+  rightGroup.appendChild(charCount);
+
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) { micBtn.addEventListener('click', () => toast(t('voice_unsupported'))); return; }
+
+  const LANG_MAP = { en: 'en-US', de: 'de-DE', es: 'es-ES', fr: 'fr-FR', it: 'it-IT', 'pt-BR': 'pt-BR' };
+  let recog = null, listening = false;
+  function setListening(on) {
+    listening = on;
+    micBtn.classList.toggle('is-recording', on);
+    const lbl = micBtn.querySelector('.mic-btn__label');
+    if (lbl) lbl.textContent = on ? t('voice_listening') : t('voice_btn');
+  }
+  micBtn.addEventListener('click', () => {
+    if (listening) { try { recog && recog.stop(); } catch {} return; }
+    recog = new SR();
+    recog.lang = LANG_MAP[lang] || 'en-US';
+    recog.interimResults = false;
+    recog.continuous = true;
+    recog.onresult = (e) => {
+      let text = '';
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        if (e.results[i].isFinal) text += e.results[i][0].transcript;
+      }
+      text = text.trim();
+      if (text) {
+        const sep = input.value && !/\s$/.test(input.value) ? ' ' : '';
+        input.value += sep + text;
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+    };
+    recog.onerror = (e) => {
+      setListening(false);
+      if (e.error === 'not-allowed' || e.error === 'service-not-allowed') toast(t('voice_denied'), 'warn');
+    };
+    recog.onend = () => setListening(false);
+    try { recog.start(); setListening(true); input.focus(); } catch { setListening(false); }
+  });
+})();
+
 /* ---- Tonfall-Auswahl ---- */
 tonePills.forEach((pill) => {
   pill.addEventListener('click', () => {

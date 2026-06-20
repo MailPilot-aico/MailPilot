@@ -802,7 +802,9 @@ function toast(msg, type) {
   let el = document.getElementById('mpToast');
   if (!el) { el = document.createElement('div'); el.id = 'mpToast'; el.className = 'mp-toast'; el.setAttribute('role', 'status'); document.body.appendChild(el); }
   el.textContent = msg; el.dataset.type = type || ''; el.classList.add('is-show');
-  clearTimeout(toast._t); toast._t = setTimeout(() => el.classList.remove('is-show'), 5200);
+  // Längere Hinweise (z. B. die Firefox-Anleitung) bleiben länger stehen, damit man sie lesen kann.
+  const dur = Math.min(12000, Math.max(5200, msg.length * 90));
+  clearTimeout(toast._t); toast._t = setTimeout(() => el.classList.remove('is-show'), dur);
 }
 
 /* ---- Theme (Dark/Light) – dauerhaft in localStorage ---- */

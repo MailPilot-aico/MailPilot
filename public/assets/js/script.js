@@ -254,6 +254,11 @@ const STYLE_KEY = 'mp_style';
 function getStyle() { try { return (localStorage.getItem(STYLE_KEY) || '').trim(); } catch { return ''; } }
 function wantsVariants() { const c = document.getElementById('variantsToggle'); return !!(c && c.checked); }
 
+// Virale Signatur: beim Kopieren ein dezenter „Geschrieben mit MailPilot"-Hinweis (abschaltbar).
+const PROMO_KEY = 'mp_promo';
+function promoEnabled() { try { return localStorage.getItem(PROMO_KEY) !== '0'; } catch { return true; } }
+function getPromoLine() { return t('promo_line'); }
+
 // Signatur in die E-Mail einsetzen (ersetzt [Name], sonst angehängt).
 function applySignature(email) {
   const sig = getSignature();
@@ -430,6 +435,44 @@ input.addEventListener('keydown', (e) => {
   if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); runOptimize(); }
 });
 
+// „Ärger entschärfen": macht aus einem wütenden Entwurf eine sachliche, ruhige Mail.
+(function setupDeescalate() {
+  if (!optimizeBtn) return;
+  const btn = htmlToEl('<button type="button" class="btn btn--ghost" id="deescalateBtn" title="' + escapeHtml(t('deescalate_btn')) + '"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg><span class="btn__label" data-i18n="deescalate_btn">' + escapeHtml(t('deescalate_btn')) + '</span></button>');
+  optimizeBtn.insertAdjacentElement('afterend', btn);
+  btn.addEventListener('click', runDeescalate);
+})();
+
+async function runDeescalate() {
+  const text = input.value.trim();
+  if (!text) {
+    input.focus();
+    input.classList.remove('shake'); void input.offsetWidth; input.classList.add('shake');
+    setStatus(t('st_need_input'), 'warn');
+    return;
+  }
+  if (!currentUser) { openAuthModal('login'); return; }
+  setLoading(true);
+  setStatus(t('st_optimizing'), 'busy');
+  try {
+    const result = await generateEmail(text, activeTone, activeLength, activeFormality, {
+      deescalate: true, subject: true, style: getStyle(),
+    });
+    if (result.needLogin) { openAuthModal('login'); setStatus(t('st_signin'), 'warn'); return; }
+    if (result.limitReached) { setRemaining(0); openAuthModal('upgrade'); setStatus(t('st_limit'), 'warn'); return; }
+    resultVariants = (result.variants && result.variants.length > 1)
+      ? result.variants
+      : [{ subject: result.subject || '', email: result.email }];
+    currentVariant = 0;
+    renderVariantSwitcher();
+    setStatus(result.source === 'api' ? t('st_ready') : t('st_demo'), result.source === 'api' ? 'ok' : 'warn');
+    if (typeof result.remaining === 'number') setRemaining(result.remaining);
+    await showResult(resultVariants[0].email, resultVariants[0].subject, result.source === 'api');
+    setRefineEnabled(true);
+  } catch (err) { console.error(err); setStatus(t('st_error'), 'error'); }
+  finally { setLoading(false); }
+}
+
 async function runOptimize() {
   const text = input.value.trim();
 
@@ -497,11 +540,17 @@ function setStatus(text, type) {
 /* ---- In die Zwischenablage kopieren ---- */
 copyBtn.addEventListener('click', async () => {
   if (!output.value) return;
+  // Beim Kopieren den (abschaltbaren) MailPilot-Hinweis anhängen → virale Verbreitung.
+  let txt = output.value;
+  if (promoEnabled()) txt = txt.replace(/\s+$/, '') + '\n\n' + getPromoLine();
   try {
-    await navigator.clipboard.writeText(output.value);
+    await navigator.clipboard.writeText(txt);
   } catch {
+    const prev = output.value;
+    output.value = txt;
     output.select();
     document.execCommand('copy');
+    output.value = prev;
     window.getSelection()?.removeAllRanges();
   }
   const label = copyBtn.querySelector('.btn__label');
@@ -553,6 +602,7 @@ async function generateEmail(text, tone, length, formality, opts) {
     if (opts.style)                         payload.style    = opts.style;     // eigener Stil
     if (opts.subject)                       payload.subject  = true;           // Betreffzeile
     if (opts.variants && opts.variants > 1) payload.variants = opts.variants;  // Varianten
+    if (opts.deescalate)                    payload.deescalate = true;         // Ärger entschärfen
   }
 
   let res;
@@ -1027,6 +1077,8 @@ const SET_EN = {
   set_style_hint: 'Optional — emails are then written in your personal style.',
   tpl_label: 'Templates', variants_toggle: 'Generate 2 variants', variant_label: 'Variant', subject_label: 'Subject',
   refine_friendly: 'friendlier', refine_shorter: 'shorter', refine_formal: 'more formal', refine_assertive: 'more assertive',
+  deescalate_btn: 'Calm it down', promo_line: 'Written with MailPilot · mailpilot-ai.com',
+  set_promo: 'Add a "Written with MailPilot" line when copying',
 };
 const SET_DE = {
   set_open: 'Einstellungen', set_title: 'Einstellungen',
@@ -1051,6 +1103,8 @@ const SET_DE = {
   set_style_hint: 'Optional — E-Mails werden dann in deinem persönlichen Stil geschrieben.',
   tpl_label: 'Vorlagen', variants_toggle: '2 Varianten erzeugen', variant_label: 'Variante', subject_label: 'Betreff',
   refine_friendly: 'freundlicher', refine_shorter: 'kürzer', refine_formal: 'förmlicher', refine_assertive: 'bestimmter',
+  deescalate_btn: 'Ärger entschärfen', promo_line: 'Geschrieben mit MailPilot · mailpilot-ai.com',
+  set_promo: 'Beim Kopieren „Geschrieben mit MailPilot" anhängen',
 };
 if (typeof I18N !== 'undefined') { Object.assign(I18N.en, SET_EN); Object.assign(I18N.de, SET_DE); }
 
@@ -1119,6 +1173,9 @@ const settingsModal = htmlToEl(`
         <textarea id="setStyle" class="set-sign" rows="4" data-i18n-ph="set_style_ph" placeholder="Paste 1–3 of your own emails …"></textarea>
         <p class="set-hint" data-i18n="set_style_hint">Optional — emails are written in your personal style.</p>
       </section>
+      <section class="set-section">
+        <label class="opt-check" style="margin:0;"><input type="checkbox" id="setPromo" /><span data-i18n="set_promo">Add a "Written with MailPilot" line when copying</span></label>
+      </section>
     </div>
   </div>`);
 document.body.appendChild(settingsModal);
@@ -1133,6 +1190,11 @@ const styleField = document.getElementById('setStyle');
 if (styleField) {
   styleField.value = getStyle();
   styleField.addEventListener('input', () => { try { localStorage.setItem(STYLE_KEY, styleField.value); } catch {} });
+}
+const promoBox = document.getElementById('setPromo');
+if (promoBox) {
+  promoBox.checked = promoEnabled();
+  promoBox.addEventListener('change', () => { try { localStorage.setItem(PROMO_KEY, promoBox.checked ? '1' : '0'); } catch {} });
 }
 
 // Zahnrad öffnet das Panel und lädt Konto + Abo frisch.

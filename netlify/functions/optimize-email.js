@@ -89,6 +89,16 @@ Regeln:
 // Verbessern-Modus (Schnell-Buttons „freundlicher/kürzer/…"): bestehende E-Mail überarbeiten.
 const REFINE_SYSTEM_PROMPT = `Du bist ein E-Mail-Copilot. Überarbeite die E-Mail des Nutzers gemäß seiner Anweisung. Behalte die SPRACHE der E-Mail bei. Ändere nur, was die Anweisung verlangt; bleibe inhaltlich treu und erfinde nichts. Gib ausschließlich die überarbeitete E-Mail aus – keinen Betreff, keine Erklärungen, keine Kommentare.`;
 
+// Entschärfen-Modus: aus einem wütenden/emotionalen Entwurf eine sachliche, professionelle Mail machen.
+const DEESCALATE_SYSTEM_PROMPT = `Du bist ein E-Mail-Copilot. Der Nutzer hat einen emotionalen, verärgerten oder zu scharf formulierten Entwurf geschrieben. Formuliere daraus eine sachliche, professionelle und höfliche E-Mail.
+
+Regeln:
+- Behalte das eigentliche Anliegen und die Fakten vollständig bei; entferne Beleidigungen, Schuldzuweisungen, Sarkasmus und übermäßige Emotionen.
+- Bleibe in der Sache klar und bestimmt, im Ton aber ruhig, respektvoll und deeskalierend.
+- Schreibe eine vollständige E-Mail mit passender Anrede und Grußformel.
+- Erfinde keine Fakten. Fehlt eine Angabe, nutze einen neutralen Platzhalter wie [Name] oder [Datum].
+- Gib ausschließlich die fertige E-Mail aus – keine Einleitung, keine Erklärungen, keine Kommentare.`;
+
 // Betreffzeile aus der Modell-Antwort trennen (Format „BETREFF: …" als erste Zeile).
 function parseSubject(raw, wantSubject) {
   let s = String(raw || "").trim();
@@ -234,17 +244,23 @@ export const handler = async (event) => {
     `Gewünschte Länge auf einer Skala von 0 (sehr kurz und knapp) bis 100 (sehr ausführlich und detailliert): ${length}.\n` +
     `Gewünschte Förmlichkeit auf einer Skala von 0 (sehr locker, Du-Form) bis 100 (sehr förmlich, Sie-Form): ${formality}.\n\n`;
 
-  // Optionale Extras: persönlicher Stil (4), Betreff (7), Varianten (6).
+  // Optionale Extras: persönlicher Stil (4), Betreff (7), Varianten (6), Entschärfen.
   const style = String(body.style ?? "").trim().slice(0, 4000);
   const wantSubject = body.subject === true;
   const variants = Math.min(3, Math.max(1, parseInt(body.variants, 10) || 1));
+  const deescalate = body.deescalate === true;
 
-  // Im Antwort-Modus die erhaltene E-Mail mitgeben und den Antwort-System-Prompt nutzen.
-  let userContent = replyTo
-    ? controls +
+  // Eingabe je nach Modus aufbereiten (Entschärfen > Antwort > normale Notizen).
+  let userContent;
+  if (deescalate) {
+    userContent = controls + `Verärgerter, emotionaler oder zu scharfer Entwurf des Nutzers, den du sachlich, professionell und deeskalierend umformulierst:\n${text}`;
+  } else if (replyTo) {
+    userContent = controls +
       `Erhaltene E-Mail, auf die geantwortet werden soll:\n"""\n${replyTo}\n"""\n\n` +
-      `Stichpunkte des Nutzers für die Antwort:\n${text}`
-    : controls + `Notizen / Roher Entwurf:\n${text}`;
+      `Stichpunkte des Nutzers für die Antwort:\n${text}`;
+  } else {
+    userContent = controls + `Notizen / Roher Entwurf:\n${text}`;
+  }
   if (style) {
     userContent += `\n\nSchreibe im persönlichen Stil dieser Beispiel-E-Mails des Nutzers (übernimm Ton, Wortwahl und typische Formulierungen, NICHT deren konkreten Inhalt):\n"""\n${style}\n"""`;
   }
@@ -255,7 +271,8 @@ export const handler = async (event) => {
   const variantsRule = variants > 1
     ? `\n\nErzeuge ${variants} deutlich unterschiedliche Varianten der E-Mail. Trenne die Varianten durch eine eigene Zeile mit ausschließlich "#####". Keine Nummerierung, keine Kommentare.`
     : "";
-  const system = (replyTo ? REPLY_SYSTEM_PROMPT : SYSTEM_PROMPT) + subjectRule + variantsRule;
+  const baseSystem = deescalate ? DEESCALATE_SYSTEM_PROMPT : (replyTo ? REPLY_SYSTEM_PROMPT : SYSTEM_PROMPT);
+  const system = baseSystem + subjectRule + variantsRule;
 
   try {
     const baseTokens = length >= 67 || replyTo ? 3000 : 2000;

@@ -10,6 +10,9 @@ const isPublicRoute = createRouteMatcher([
   "/sign-in(.*)",
   "/sign-up(.*)",
   "/.netlify/functions/(.*)",
+  // Outlook-Add-in: Anmeldeseite für den Office-Dialog (zeigt selbst <SignIn/> und
+  // gibt das Token an die Task-Pane zurück – darf NICHT auf /sign-in umgeleitet werden).
+  "/outlook(.*)",
 ]);
 
 // Next 16: Datei-Konvention "proxy" (früher "middleware"). clerkMiddleware ist

@@ -76,6 +76,40 @@ export default function RootLayout({ children }) {
               __html: "if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('/sw.js').catch(function(){});});}",
             }}
           />
+          {/* Strukturierte Daten (schema.org SoftwareApplication) → reichere Google-
+              Treffer. Nur echte, belegbare Angaben (keine erfundenen Bewertungen). */}
+          <script
+            type="application/ld+json"
+            dangerouslySetInnerHTML={{
+              __html: JSON.stringify({
+                '@context': 'https://schema.org',
+                '@type': 'SoftwareApplication',
+                name: 'MailPilot',
+                url: SITE_URL,
+                description: DESCRIPTION,
+                applicationCategory: 'BusinessApplication',
+                operatingSystem: 'Web, Windows, macOS, Microsoft Outlook',
+                image: `${SITE_URL}/og.png`,
+                screenshot: `${SITE_URL}/og.png`,
+                inLanguage: ['en', 'de', 'es', 'fr', 'it', 'pt'],
+                featureList: [
+                  'Turn bullet points into a finished email',
+                  'Reply mode',
+                  'Adjustable tone, length and formality',
+                  'One-click rephrasing',
+                  'Translate into 15+ languages',
+                  'Automatic name and signature',
+                ],
+                offers: {
+                  '@type': 'Offer',
+                  price: '0',
+                  priceCurrency: 'EUR',
+                  description: 'Free daily quota; paid subscriptions available.',
+                },
+                publisher: { '@type': 'Organization', name: 'MailPilot', url: SITE_URL },
+              }),
+            }}
+          />
         </head>
         <body>{children}</body>
       </html>

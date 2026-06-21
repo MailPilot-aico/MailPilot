@@ -23,7 +23,7 @@ export default clerkMiddleware(async (auth, request) => {
 export const config = {
   matcher: [
     // `\.netlify` ausnehmen → die Middleware läuft auf Netlify-Functions gar nicht erst.
-    "/((?!_next|\\.netlify|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|exe|dmg|msi|pkg|webmanifest)).*)",
+    "/((?!_next|\\.netlify|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|exe|dmg|msi|pkg|webmanifest|xml|txt|md)).*)",
     "/(api|trpc)(.*)",
   ],
 };

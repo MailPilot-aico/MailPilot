@@ -160,9 +160,16 @@
       $('out').value = email; $('insert').disabled = !email; $('gen').disabled = false;
     }
 
+    // Reinen Text in HTML wandeln, damit Outlook (HTML-Mail) die Zeilenumbrüche/Absätze
+    // behält – sonst wird alles in einen Block geschrieben.
+    function textToHtml(s) {
+      return String(s == null ? '' : s)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/\r\n|\r|\n/g, '<br>');
+    }
     function insertIntoMail() {
       if (!ready || !Office.context || !Office.context.mailbox) { setStatus('Das Einfügen funktioniert nur im Outlook-Schreibfenster.'); return; }
-      Office.context.mailbox.item.body.setSelectedDataAsync($('out').value, { coercionType: Office.CoercionType.Text },
+      Office.context.mailbox.item.body.setSelectedDataAsync(textToHtml($('out').value), { coercionType: Office.CoercionType.Html },
         function (r) { setStatus(r.status === Office.AsyncResultStatus.Succeeded ? 'In die E-Mail eingefügt ✓' : 'Einfügen fehlgeschlagen.'); });
     }
 

@@ -13,6 +13,9 @@ const isPublicRoute = createRouteMatcher([
   // Outlook-Add-in: Anmeldeseite für den Office-Dialog (zeigt selbst <SignIn/> und
   // gibt das Token an die Task-Pane zurück – darf NICHT auf /sign-in umgeleitet werden).
   "/outlook(.*)",
+  // Rechtsseiten – müssen ohne Login erreichbar sein (auch für AppSource-Prüfer).
+  "/privacy(.*)",
+  "/terms(.*)",
 ]);
 
 // Next 16: Datei-Konvention "proxy" (früher "middleware"). clerkMiddleware ist

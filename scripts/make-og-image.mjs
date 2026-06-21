@@ -50,7 +50,7 @@ const emailLines = [
   "Geben Sie mir gern bis Freitag Bescheid.",
   "",
   "Mit freundlichen Grüßen",
-  "[Name]",
+  "Thomas Berger",
 ];
 const notesLines = [
   "Angebot Webdesign",
@@ -130,8 +130,11 @@ const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" 
   <!-- E-Mail-Text -->
   ${lines(emailLines, 24, 216, 27, `font-family="${FF}" font-size="16" fill="#201f1e"`)}
 
-  <!-- Cursor-Andeutung am Ende -->
-  <rect x="68" y="617" width="2" height="0" fill="${OL}"/>
+  <!-- Call-to-Action (klar sichtbarer Button + Domain) -->
+  <rect x="26" y="560" width="292" height="48" rx="24" fill="#000000" fill-opacity="0.12"/>
+  <rect x="24" y="556" width="292" height="48" rx="24" fill="#8b5cf6"/>
+  <text x="170" y="586" text-anchor="middle" font-family="${FF}" font-size="16" font-weight="700" fill="#ffffff">Jetzt kostenlos testen  →</text>
+  <text x="340" y="586" font-family="${FF}" font-size="15" font-weight="600" fill="#7c3aed">mailpilot-ai.com</text>
 
   <!-- Trennschatten zum Pane -->
   <rect x="${PANE_X - 5}" y="${TOP}" width="5" height="${H - TOP}" fill="#000000" fill-opacity="0.10"/>

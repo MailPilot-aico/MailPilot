@@ -250,6 +250,7 @@ export const handler = async (event) => {
   const variants = Math.min(3, Math.max(1, parseInt(body.variants, 10) || 1));
   const deescalate = body.deescalate === true;
   const industry = String(body.industry ?? "").trim().slice(0, 80);   // Branchen-Kontext
+  const senderName = String(body.senderName ?? "").trim().slice(0, 80); // Absender-Name aus den Einstellungen
 
   // Eingabe je nach Modus aufbereiten (Entschärfen > Antwort > normale Notizen).
   let userContent;
@@ -278,8 +279,13 @@ export const handler = async (event) => {
   // Auto-Korrektur: Tipp-/Rechtschreib-/Grammatik- und Spracherkennungsfehler aus der
   // Eingabe werden NICHT übernommen, sondern in der fertigen E-Mail korrekt geschrieben.
   const correctionRule = `\n\nKorrigiere automatisch alle Rechtschreib-, Tipp- und Grammatikfehler sowie Spracherkennungsfehler aus der Eingabe. Übernimm Fehler NICHT 1:1 – die fertige E-Mail muss durchgehend fehlerfrei und korrekt geschrieben sein.`;
+  // Persönlicher Name aus den Einstellungen: direkt in die Grußformel setzen,
+  // statt einen [Name]-Platzhalter zu hinterlassen.
+  const nameRule = senderName
+    ? `\n\nDer Absender (Verfasser dieser E-Mail) heißt "${senderName}". Setze GENAU diesen Namen in die Grußformel bzw. Signatur am Ende der E-Mail. Verwende dort KEINEN Namens-Platzhalter wie [Name].`
+    : "";
   const baseSystem = deescalate ? DEESCALATE_SYSTEM_PROMPT : (replyTo ? REPLY_SYSTEM_PROMPT : SYSTEM_PROMPT);
-  const system = baseSystem + correctionRule + industryRule + subjectRule + variantsRule;
+  const system = baseSystem + correctionRule + nameRule + industryRule + subjectRule + variantsRule;
 
   try {
     const baseTokens = length >= 67 || replyTo ? 3000 : 2000;

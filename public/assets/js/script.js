@@ -709,6 +709,12 @@ async function generateEmail(text, tone, length, formality, opts) {
     if (opts.industry)                      payload.industry = opts.industry;  // Branchen-Kontext
   }
 
+  // Persönlichen Namen (aus den Einstellungen) mitschicken → die KI setzt ihn
+  // direkt in die Grußformel, statt einen [Name]-Platzhalter zu hinterlassen.
+  // applySignature() bleibt zusätzlich als Fallback aktiv.
+  const senderName = getName();
+  if (senderName) payload.senderName = senderName;
+
   let res;
   try {
     res = await fetch(API_ENDPOINT, { method: 'POST', headers, body: JSON.stringify(payload) });
@@ -1258,6 +1264,11 @@ const settingsModal = htmlToEl(`
       <button class="modal__close" type="button" data-close aria-label="Close">&times;</button>
       <h2 class="modal__title" id="setTitle" data-i18n="set_title">Settings</h2>
       <section class="set-section">
+        <div class="set-section__title" data-i18n="set_name">Your name</div>
+        <input id="setName" type="text" class="set-input" data-i18n-ph="set_name_ph" placeholder="e.g. Hans Müller" />
+        <p class="set-hint" data-i18n="set_name_hint">Used under the closing — replaces [Name] automatically.</p>
+      </section>
+      <section class="set-section">
         <div class="set-section__title" data-i18n="set_appearance">Appearance</div>
         <div class="set-row">
           <span data-i18n="set_theme">Theme</span>
@@ -1266,11 +1277,6 @@ const settingsModal = htmlToEl(`
             <button type="button" data-theme-set="light" data-i18n="set_light">Light</button>
           </div>
         </div>
-      </section>
-      <section class="set-section">
-        <div class="set-section__title" data-i18n="set_name">Your name</div>
-        <input id="setName" type="text" class="set-input" data-i18n-ph="set_name_ph" placeholder="e.g. Hans Müller" />
-        <p class="set-hint" data-i18n="set_name_hint">Used under the closing — replaces [Name] automatically.</p>
       </section>
       <section class="set-section">
         <div class="set-section__title" data-i18n="set_industry">Industry</div>

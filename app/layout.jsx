@@ -1,13 +1,39 @@
 import { ClerkProvider } from '@clerk/nextjs'
 
+// metadataBase macht alle relativen URLs (og:image etc.) absolut – nötig, damit
+// Social-Netzwerke das Vorschaubild beim Teilen korrekt laden.
+const SITE_URL = 'https://mailpilot-ai.com'
+const TITLE = 'MailPilot — From notes to the perfect email'
+const DESCRIPTION = 'MailPilot — AI copilot that turns your bullet points into professional emails.'
+
 export const metadata = {
-  title: 'MailPilot — From notes to the perfect email',
-  description: 'MailPilot — AI copilot that turns your bullet points into professional emails.',
+  metadataBase: new URL(SITE_URL),
+  title: TITLE,
+  description: DESCRIPTION,
+  applicationName: 'MailPilot',
+  alternates: { canonical: '/' },
   icons: {
     icon: '/assets/logononame.png',
     apple: '/icons/icon-192.png',
   },
   appleWebApp: { capable: true, title: 'MailPilot', statusBarStyle: 'black-translucent' },
+  // Vorschaukarte beim Teilen (WhatsApp, LinkedIn, Slack, iMessage …).
+  openGraph: {
+    type: 'website',
+    url: SITE_URL,
+    siteName: 'MailPilot',
+    title: TITLE,
+    description: DESCRIPTION,
+    locale: 'en_US',
+    images: [{ url: '/og.png', width: 1200, height: 630, alt: 'MailPilot — AI email copilot' }],
+  },
+  // Twitter/X-Karte (großes Bild).
+  twitter: {
+    card: 'summary_large_image',
+    title: TITLE,
+    description: DESCRIPTION,
+    images: ['/og.png'],
+  },
 }
 
 export default function RootLayout({ children }) {

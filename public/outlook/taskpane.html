@@ -154,7 +154,8 @@
           body: JSON.stringify({ text: text, tone: $('tone').value, length: +$('len').value, formality: +$('form').value })
         });
         if (res.ok) { var d = await res.json(); email = d.email || ''; setStatus('Fertig.'); }
-        else if (res.status === 401) { authToken = null; setLoggedIn(false); email = demo(text, $('tone').value); setStatus('Bitte anmelden (Demo-Modus angezeigt).'); }
+        else if (res.status === 401) { authToken = null; setLoggedIn(false); $('gen').disabled = false; setStatus('Sitzung abgelaufen – bitte oben erneut „Anmelden".'); return; }
+        else if (res.status === 429) { $('gen').disabled = false; setStatus('Tageslimit erreicht (5 gratis pro Tag). Morgen wieder – oder Tarif upgraden.'); return; }
         else { email = demo(text, $('tone').value); setStatus('Demo-Modus.'); }
       } catch (e) { email = demo(text, $('tone').value); setStatus('Offline — Demo-Modus.'); }
       $('out').value = email; $('insert').disabled = !email; $('gen').disabled = false;

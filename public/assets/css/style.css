@@ -1208,3 +1208,7 @@ html { scroll-behavior: smooth; }
 .tpl-chip__del:hover { color: #ff6b6b; }
 .tpl-chip--save { border-style: dashed; color: var(--accent); }
 .tpl-chip--save:hover { background: var(--accent-soft); border-style: solid; }
+
+/* ---- Name-Eingabefeld in den Einstellungen ---- */
+.set-input { width: 100%; background: var(--bg-soft); color: var(--text); border: 1px solid var(--border); border-radius: 10px; padding: 9px 12px; font: inherit; font-size: 14px; }
+.set-input:focus { outline: none; border-color: var(--accent); }

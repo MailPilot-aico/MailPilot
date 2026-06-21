@@ -220,6 +220,8 @@ input.addEventListener('input', updateCharCount);
 /* ---- Antwort-Modus + Signatur (Helfer) ---- */
 const SIG_KEY = 'mp_signature';
 function getSignature() { try { return (localStorage.getItem(SIG_KEY) || '').trim(); } catch { return ''; } }
+const NAME_KEY = 'mp_name';
+function getName() { try { return (localStorage.getItem(NAME_KEY) || '').trim(); } catch { return ''; } }
 function getReplyTo() {
   const tg = document.getElementById('replyToggle');
   const fl = document.getElementById('replyInput');
@@ -261,12 +263,14 @@ function getPromoLine() { return t('promo_line'); }
 
 // Signatur in die E-Mail einsetzen (ersetzt [Name], sonst angehängt).
 function applySignature(email) {
+  if (typeof email !== 'string') return email;
+  let out = email;
+  const namePh = /\[(?:ihr |dein |your )?name\]/i;
+  const name = getName();
+  if (name) out = out.replace(namePh, name);          // Name in die Grußformel (ersetzt [Name])
   const sig = getSignature();
-  if (sig && typeof email === 'string') {
-    const namePh = /\[(?:ihr |dein |your )?name\]/i;
-    return namePh.test(email) ? email.replace(namePh, sig) : email.replace(/\s+$/, '') + '\n' + sig;
-  }
-  return email;
+  if (sig) out = namePh.test(out) ? out.replace(namePh, sig) : out.replace(/\s+$/, '') + '\n' + sig;
+  return out;
 }
 
 // Betreffzeile anzeigen/verbergen.
@@ -1182,6 +1186,7 @@ const SET_EN = {
   set_industry: 'Industry', set_industry_hint: 'Templates and wording adapt to your industry.',
   tpl_save: 'Save', tpl_save_prompt: 'Name for this template:', tpl_saved: 'Template saved.',
   tpl_need_text: 'Please enter some notes first.',
+  set_name: 'Your name', set_name_ph: 'e.g. Hans Müller', set_name_hint: 'Used under the closing — replaces [Name] automatically.',
 };
 const SET_DE = {
   set_open: 'Einstellungen', set_title: 'Einstellungen',
@@ -1211,6 +1216,7 @@ const SET_DE = {
   set_industry: 'Branche', set_industry_hint: 'Vorlagen und Formulierungen passen sich deiner Branche an.',
   tpl_save: 'Speichern', tpl_save_prompt: 'Name für die Vorlage:', tpl_saved: 'Vorlage gespeichert.',
   tpl_need_text: 'Bitte zuerst Stichpunkte eingeben.',
+  set_name: 'Dein Name', set_name_ph: 'z. B. Hans Müller', set_name_hint: 'Wird unter die Grußformel gesetzt — ersetzt automatisch [Name].',
 };
 if (typeof I18N !== 'undefined') { Object.assign(I18N.en, SET_EN); Object.assign(I18N.de, SET_DE); }
 
@@ -1262,6 +1268,11 @@ const settingsModal = htmlToEl(`
         </div>
       </section>
       <section class="set-section">
+        <div class="set-section__title" data-i18n="set_name">Your name</div>
+        <input id="setName" type="text" class="set-input" data-i18n-ph="set_name_ph" placeholder="e.g. Hans Müller" />
+        <p class="set-hint" data-i18n="set_name_hint">Used under the closing — replaces [Name] automatically.</p>
+      </section>
+      <section class="set-section">
         <div class="set-section__title" data-i18n="set_industry">Industry</div>
         <select id="setIndustry" class="set-select"></select>
         <p class="set-hint" data-i18n="set_industry_hint">Templates and wording adapt to your industry.</p>
@@ -1306,6 +1317,11 @@ const promoBox = document.getElementById('setPromo');
 if (promoBox) {
   promoBox.checked = promoEnabled();
   promoBox.addEventListener('change', () => { try { localStorage.setItem(PROMO_KEY, promoBox.checked ? '1' : '0'); } catch {} });
+}
+const nameField = document.getElementById('setName');
+if (nameField) {
+  nameField.value = getName();
+  nameField.addEventListener('input', () => { try { localStorage.setItem(NAME_KEY, nameField.value); } catch {} });
 }
 const industrySel = document.getElementById('setIndustry');
 if (industrySel) {

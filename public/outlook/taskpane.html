@@ -104,13 +104,13 @@
     function bucket(v) { return Math.round(v / 25); }
 
     function login() {
-      if (authToken) { authToken = null; setLoggedIn(false); setStatus('Abgemeldet.'); return; }
+      if (authToken) { authToken = null; try { localStorage.removeItem('mp_addin_token'); } catch (e) {} setLoggedIn(false); setStatus('Abgemeldet.'); return; }
       if (!ready || !Office.context || !Office.context.ui) { setStatus('Login nur im Outlook-Schreibfenster möglich.'); return; }
       Office.context.ui.displayDialogAsync('https://mailpilot-ai.com/outlook/auth', { height: 62, width: 34, promptBeforeOpen: false }, function (res) {
         if (res.status !== Office.AsyncResultStatus.Succeeded) { setStatus('Login-Fenster konnte nicht geöffnet werden.'); return; }
         var dialog = res.value;
         dialog.addEventHandler(Office.EventType.DialogMessageReceived, function (arg) {
-          try { var data = JSON.parse(arg.message); if (data && data.token) { authToken = data.token; setLoggedIn(true); setStatus('Angemeldet – echte KI aktiv.'); } } catch (e) {}
+          try { var data = JSON.parse(arg.message); if (data && data.token) { authToken = data.token; try { localStorage.setItem('mp_addin_token', data.token); } catch (e2) {} setLoggedIn(true); setStatus('Angemeldet – echte KI aktiv.'); } } catch (e) {}
           dialog.close();
         });
       });
@@ -154,7 +154,7 @@
           body: JSON.stringify({ text: text, tone: $('tone').value, length: +$('len').value, formality: +$('form').value })
         });
         if (res.ok) { var d = await res.json(); email = d.email || ''; setStatus('Fertig.'); }
-        else if (res.status === 401) { authToken = null; setLoggedIn(false); $('gen').disabled = false; setStatus('Sitzung abgelaufen – bitte oben erneut „Anmelden".'); return; }
+        else if (res.status === 401) { authToken = null; try { localStorage.removeItem('mp_addin_token'); } catch (e) {} setLoggedIn(false); $('gen').disabled = false; setStatus('Sitzung abgelaufen – bitte oben erneut „Anmelden".'); return; }
         else if (res.status === 429) { $('gen').disabled = false; setStatus('Tageslimit erreicht (5 gratis pro Tag). Morgen wieder – oder Tarif upgraden.'); return; }
         else { email = demo(text, $('tone').value); setStatus('Demo-Modus.'); }
       } catch (e) { email = demo(text, $('tone').value); setStatus('Offline — Demo-Modus.'); }
@@ -175,6 +175,9 @@
     }
 
     document.addEventListener('DOMContentLoaded', function () {
+      // Gespeicherte Anmeldung laden → man bleibt eingeloggt (solange das Token gültig ist).
+      try { authToken = localStorage.getItem('mp_addin_token') || null; } catch (e) {}
+      if (authToken) setLoggedIn(true);
       $('login').addEventListener('click', login);
       $('mic').addEventListener('click', toggleMic);
       $('gen').addEventListener('click', generate);

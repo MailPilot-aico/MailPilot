@@ -29,7 +29,11 @@ export default function OutlookAuthPage() {
     if (!isLoaded || !isSignedIn || !officeReady || sent) return;
     (async () => {
       try {
-        const token = await getToken();
+        // Bevorzugt das langlebige Token aus dem JWT-Template "mailpilot"
+        // (damit man eingeloggt bleibt). Fehlt das Template, normaler Fallback.
+        let token = null;
+        try { token = await getToken({ template: 'mailpilot' }); } catch (e) { /* Template fehlt */ }
+        if (!token) { try { token = await getToken(); } catch (e) {} }
         const ui = window.Office && window.Office.context && window.Office.context.ui;
         if (token && ui && ui.messageParent) {
           ui.messageParent(JSON.stringify({ token }));

@@ -1200,3 +1200,11 @@ html { scroll-behavior: smooth; }
 /* ---- Branchen-Auswahl ---- */
 .set-select { width: 100%; background: var(--bg-soft); color: var(--text); border: 1px solid var(--border); border-radius: 10px; padding: 9px 12px; font: inherit; font-size: 14px; cursor: pointer; }
 .set-select:focus { outline: none; border-color: var(--accent); }
+
+/* ---- Eigene gespeicherte Vorlagen ---- */
+.tpl-chip--user { display: inline-flex; align-items: center; gap: 6px; }
+.tpl-chip--user:hover { border-color: var(--accent); color: var(--text); }
+.tpl-chip__del { border: none; background: transparent; color: var(--text-faint); cursor: pointer; font-size: 15px; line-height: 1; padding: 0 0 0 2px; }
+.tpl-chip__del:hover { color: #ff6b6b; }
+.tpl-chip--save { border-style: dashed; color: var(--accent); }
+.tpl-chip--save:hover { background: var(--accent-soft); border-style: solid; }

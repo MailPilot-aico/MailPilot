@@ -412,7 +412,27 @@ function currentTemplates() {
   return TEMPLATES[lang] || TEMPLATES.en;
 }
 
-// Vorlagen-Chips über das Notizfeld injizieren (Inhalt hängt von der Branche ab).
+/* ---- Eigene (gespeicherte) Vorlagen ---- */
+const USER_TPL_KEY = 'mp_user_templates';
+function getUserTemplates() { try { return JSON.parse(localStorage.getItem(USER_TPL_KEY) || '[]'); } catch { return []; } }
+function setUserTemplates(arr) { try { localStorage.setItem(USER_TPL_KEY, JSON.stringify(arr)); } catch {} }
+function saveCurrentAsTemplate() {
+  const body = input.value.trim();
+  if (!body) { toast(t('tpl_need_text'), 'warn'); return; }
+  const name = (window.prompt(t('tpl_save_prompt')) || '').trim();
+  if (!name) return;
+  const arr = getUserTemplates().filter((x) => x.name !== name);   // gleicher Name = überschreiben
+  arr.push({ name: name.slice(0, 40), body });
+  setUserTemplates(arr);
+  renderTemplateChips();
+  toast(t('tpl_saved'), 'ok');
+}
+function deleteUserTemplate(name) {
+  setUserTemplates(getUserTemplates().filter((x) => x.name !== name));
+  renderTemplateChips();
+}
+
+// Vorlagen-Chips über das Notizfeld injizieren: Branchen-Vorlagen + eigene gespeicherte + „Speichern".
 let renderTemplateChips = function () {};
 (function setupTemplates() {
   if (!input) return;
@@ -422,14 +442,32 @@ let renderTemplateChips = function () {};
   const chipsBox = row.querySelector('#tplChips');
   renderTemplateChips = function () {
     const list = currentTemplates();
-    chipsBox.innerHTML = list.map((tp) => '<button type="button" class="tpl-chip" data-tpl="' + tp.id + '">' + escapeHtml(tp.label) + '</button>').join('');
-    chipsBox.querySelectorAll('.tpl-chip').forEach((b) => b.addEventListener('click', () => {
+    const user = getUserTemplates();
+    let html = list.map((tp) => '<button type="button" class="tpl-chip" data-tpl="' + escapeHtml(tp.id) + '">' + escapeHtml(tp.label) + '</button>').join('');
+    html += user.map((tp, i) => '<span class="tpl-chip tpl-chip--user" data-uti="' + i + '" title="' + escapeHtml(tp.name) + '">' + escapeHtml(tp.name) + '<button type="button" class="tpl-chip__del" data-udel="' + i + '" aria-label="Löschen">&times;</button></span>').join('');
+    html += '<button type="button" class="tpl-chip tpl-chip--save" id="tplSave">+ ' + escapeHtml(t('tpl_save')) + '</button>';
+    chipsBox.innerHTML = html;
+    // Branchen-/Standard-Vorlage laden
+    chipsBox.querySelectorAll('.tpl-chip[data-tpl]').forEach((b) => b.addEventListener('click', () => {
       const tp = list.find((x) => x.id === b.dataset.tpl);
       if (!tp) return;
-      input.value = tp.body;
-      input.dispatchEvent(new Event('input', { bubbles: true }));
-      input.focus();
+      input.value = tp.body; input.dispatchEvent(new Event('input', { bubbles: true })); input.focus();
     }));
+    // Eigene Vorlage laden (Klick auf den Chip, nicht auf das ×)
+    chipsBox.querySelectorAll('.tpl-chip--user').forEach((el) => el.addEventListener('click', (e) => {
+      if (e.target.closest('.tpl-chip__del')) return;
+      const tp = getUserTemplates()[+el.dataset.uti];
+      if (tp) { input.value = tp.body; input.dispatchEvent(new Event('input', { bubbles: true })); input.focus(); }
+    }));
+    // Eigene Vorlage löschen
+    chipsBox.querySelectorAll('.tpl-chip__del').forEach((b) => b.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const tp = getUserTemplates()[+b.dataset.udel];
+      if (tp) deleteUserTemplate(tp.name);
+    }));
+    // Aktuellen Text als eigene Vorlage speichern
+    const sv = chipsBox.querySelector('#tplSave');
+    if (sv) sv.addEventListener('click', saveCurrentAsTemplate);
   };
   renderTemplateChips();
 })();
@@ -1142,6 +1180,8 @@ const SET_EN = {
   deescalate_btn: 'Calm it down', promo_line: 'Written with MailPilot · mailpilot-ai.com',
   set_promo: 'Add a "Written with MailPilot" line when copying',
   set_industry: 'Industry', set_industry_hint: 'Templates and wording adapt to your industry.',
+  tpl_save: 'Save', tpl_save_prompt: 'Name for this template:', tpl_saved: 'Template saved.',
+  tpl_need_text: 'Please enter some notes first.',
 };
 const SET_DE = {
   set_open: 'Einstellungen', set_title: 'Einstellungen',
@@ -1169,6 +1209,8 @@ const SET_DE = {
   deescalate_btn: 'Ärger entschärfen', promo_line: 'Geschrieben mit MailPilot · mailpilot-ai.com',
   set_promo: 'Beim Kopieren „Geschrieben mit MailPilot" anhängen',
   set_industry: 'Branche', set_industry_hint: 'Vorlagen und Formulierungen passen sich deiner Branche an.',
+  tpl_save: 'Speichern', tpl_save_prompt: 'Name für die Vorlage:', tpl_saved: 'Vorlage gespeichert.',
+  tpl_need_text: 'Bitte zuerst Stichpunkte eingeben.',
 };
 if (typeof I18N !== 'undefined') { Object.assign(I18N.en, SET_EN); Object.assign(I18N.de, SET_DE); }
 

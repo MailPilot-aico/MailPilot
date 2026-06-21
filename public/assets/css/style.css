@@ -1196,3 +1196,7 @@ html { scroll-behavior: smooth; }
 .refine-btn { border: 1px solid var(--border); background: transparent; color: var(--text-muted); border-radius: 999px; padding: 5px 13px; font-size: 12.5px; cursor: pointer; transition: background .15s, border-color .15s, color .15s; }
 .refine-btn:hover:not(:disabled) { background: var(--accent-soft); border-color: var(--accent); color: var(--text); }
 .refine-btn:disabled { opacity: .45; cursor: default; }
+
+/* ---- Branchen-Auswahl ---- */
+.set-select { width: 100%; background: var(--bg-soft); color: var(--text); border: 1px solid var(--border); border-radius: 10px; padding: 9px 12px; font: inherit; font-size: 14px; cursor: pointer; }
+.set-select:focus { outline: none; border-color: var(--accent); }

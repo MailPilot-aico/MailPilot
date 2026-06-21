@@ -357,21 +357,81 @@ const TEMPLATES = {
   ],
 };
 
-// Vorlagen-Chips über das Notizfeld injizieren.
+/* ---- Branchen-Paket: Branche wählen → passende Vorlagen + Fachsprache ---- */
+const INDUSTRIES = [
+  { id: 'allgemein', de: 'Allgemein',                    en: 'General' },
+  { id: 'makler',    de: 'Immobilien / Makler',          en: 'Real estate' },
+  { id: 'handwerk',  de: 'Handwerk',                     en: 'Trades / crafts' },
+  { id: 'steuer',    de: 'Steuerberatung / Kanzlei',     en: 'Tax / law firm' },
+  { id: 'gastro',    de: 'Gastronomie / Hotel',          en: 'Hospitality' },
+  { id: 'handel',    de: 'Einzelhandel / Onlinehandel',  en: 'Retail / e-commerce' },
+  { id: 'beratung',  de: 'Beratung / Agentur',           en: 'Consulting / agency' },
+  { id: 'praxis',    de: 'Gesundheit / Praxis',          en: 'Healthcare / practice' },
+];
+const INDUSTRY_KEY = 'mp_industry';
+function getIndustry() { try { return localStorage.getItem(INDUSTRY_KEY) || 'allgemein'; } catch { return 'allgemein'; } }
+function industryLabel() {
+  const ind = INDUSTRIES.find((x) => x.id === getIndustry());
+  if (!ind || ind.id === 'allgemein') return '';
+  return lang === 'en' ? ind.en : ind.de;
+}
+
+// Branchenspezifische Vorlagen (deutsch); für „Allgemein"/EN die normalen TEMPLATES.
+const INDUSTRY_TEMPLATES = {
+  makler: [
+    { id: 'expose',       label: 'Exposé senden',      body: 'Exposé zu [Objekt/Adresse] versenden\nEckdaten: [Zimmer], [m²], [Preis] €\nBesichtigung möglich ab [Datum]' },
+    { id: 'besichtigung', label: 'Besichtigung',       body: 'Besichtigungstermin für [Objekt]\nVorschlag: [Datum] um [Uhrzeit]\nbitte um kurze Bestätigung' },
+    { id: 'absage_int',   label: 'Absage Interessent', body: 'Leider Absage zu [Objekt]\nObjekt ist bereits [reserviert/verkauft]\nDank für das Interesse, melde mich bei passenden Objekten' },
+    { id: 'preis',        label: 'Preisrückmeldung',   body: 'Rückmeldung zur Preisvorstellung für [Objekt]\nangebotener Preis: [X] €\nSpielraum: [kurz]' },
+  ],
+  handwerk: [
+    { id: 'kva',     label: 'Kostenvoranschlag', body: 'Kostenvoranschlag für [Arbeit/Projekt]\ngeschätzte Kosten: [X] €\nDauer: [X] Tage\nMaterial inklusive: [ja/nein]' },
+    { id: 'termin',  label: 'Terminbestätigung', body: 'Terminbestätigung für [Arbeit]\nDatum: [Datum] ab [Uhrzeit]\nbitte Zugang/Parkmöglichkeit sicherstellen' },
+    { id: 'verzug',  label: 'Terminverschiebung',body: 'Termin für [Arbeit] muss leider verschoben werden\nGrund: [kurz]\nneuer Vorschlag: [Datum]' },
+    { id: 'rechnung',label: 'Rechnung ankündigen',body: 'Arbeit [Projekt] ist abgeschlossen\nRechnung folgt über [X] €\nZahlungsziel: [X] Tage' },
+  ],
+  steuer: [
+    { id: 'unterlagen', label: 'Unterlagen anfordern', body: 'Bitte um Unterlagen für [Mandant/Zeitraum]\nbenötigt: [Belege/Kontoauszüge/…]\nFrist: [Datum]' },
+    { id: 'frist',      label: 'Fristerinnerung',      body: 'Erinnerung an Frist [Steuererklärung/Abgabe]\nFälligkeit: [Datum]\nbitte fehlende Unterlagen nachreichen' },
+    { id: 'termin',     label: 'Besprechung',          body: 'Terminvorschlag zur Besprechung [Thema]\nDatum: [Datum] um [Uhrzeit]\nOrt: [Kanzlei/Online]' },
+  ],
+  gastro: [
+    { id: 'reservierung', label: 'Reservierung', body: 'Bestätigung Reservierung\nfür [Personenzahl] am [Datum] um [Uhrzeit]\nbesondere Wünsche: [kurz]' },
+    { id: 'event',        label: 'Event-Anfrage', body: 'Angebot für [Feier/Event]\n[Personenzahl] Personen am [Datum]\nMenü/Paket: [kurz], Preis ab [X] €' },
+    { id: 'ausgebucht',   label: 'Ausgebucht',    body: 'Leider ausgebucht für [Datum]\nAlternative: [Datum/Uhrzeit]\nfreuen uns auf einen Besuch' },
+  ],
+  handel: [
+    { id: 'bestell', label: 'Bestellbestätigung', body: 'Bestellbestätigung Nr. [X]\nArtikel: [kurz]\nLieferung voraussichtlich [Datum]' },
+    { id: 'versand', label: 'Versandinfo',        body: 'Bestellung [Nr.] ist unterwegs\nSendungsnummer: [X]\nvoraussichtliche Zustellung: [Datum]' },
+    { id: 'retoure', label: 'Retoure',            body: 'Rückmeldung zur Retoure [Bestellnr.]\nArtikel: [kurz]\nErstattung/Umtausch: [Option] in [X] Tagen' },
+  ],
+};
+function currentTemplates() {
+  const ind = getIndustry();
+  if (ind !== 'allgemein' && INDUSTRY_TEMPLATES[ind]) return INDUSTRY_TEMPLATES[ind];
+  return TEMPLATES[lang] || TEMPLATES.en;
+}
+
+// Vorlagen-Chips über das Notizfeld injizieren (Inhalt hängt von der Branche ab).
+let renderTemplateChips = function () {};
 (function setupTemplates() {
   if (!input) return;
-  const list = TEMPLATES[lang] || TEMPLATES.en;
-  const chips = list.map((tp) => '<button type="button" class="tpl-chip" data-tpl="' + tp.id + '">' + escapeHtml(tp.label) + '</button>').join('');
-  const row = htmlToEl('<div class="tpl-row" id="tplRow" role="group" aria-label="' + escapeHtml(t('tpl_label')) + '"><span class="tpl-row__label" data-i18n="tpl_label">' + escapeHtml(t('tpl_label')) + '</span><div class="tpl-row__chips">' + chips + '</div></div>');
+  const row = htmlToEl('<div class="tpl-row" id="tplRow" role="group" aria-label="' + escapeHtml(t('tpl_label')) + '"><span class="tpl-row__label" data-i18n="tpl_label">' + escapeHtml(t('tpl_label')) + '</span><div class="tpl-row__chips" id="tplChips"></div></div>');
   const anchor = document.getElementById('replyBox') || input;
   anchor.insertAdjacentElement('beforebegin', row);
-  row.querySelectorAll('.tpl-chip').forEach((b) => b.addEventListener('click', () => {
-    const tp = list.find((x) => x.id === b.dataset.tpl);
-    if (!tp) return;
-    input.value = tp.body;
-    input.dispatchEvent(new Event('input', { bubbles: true }));
-    input.focus();
-  }));
+  const chipsBox = row.querySelector('#tplChips');
+  renderTemplateChips = function () {
+    const list = currentTemplates();
+    chipsBox.innerHTML = list.map((tp) => '<button type="button" class="tpl-chip" data-tpl="' + tp.id + '">' + escapeHtml(tp.label) + '</button>').join('');
+    chipsBox.querySelectorAll('.tpl-chip').forEach((b) => b.addEventListener('click', () => {
+      const tp = list.find((x) => x.id === b.dataset.tpl);
+      if (!tp) return;
+      input.value = tp.body;
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      input.focus();
+    }));
+  };
+  renderTemplateChips();
 })();
 
 // „Mehrere Varianten"-Schalter direkt über dem Notizfeld.
@@ -456,7 +516,7 @@ async function runDeescalate() {
   setStatus(t('st_optimizing'), 'busy');
   try {
     const result = await generateEmail(text, activeTone, activeLength, activeFormality, {
-      deescalate: true, subject: true, style: getStyle(),
+      deescalate: true, subject: true, style: getStyle(), industry: industryLabel(),
     });
     if (result.needLogin) { openAuthModal('login'); setStatus(t('st_signin'), 'warn'); return; }
     if (result.limitReached) { setRemaining(0); openAuthModal('upgrade'); setStatus(t('st_limit'), 'warn'); return; }
@@ -500,6 +560,7 @@ async function runOptimize() {
       subject: true,                       // Betreffzeile (7)
       style: getStyle(),                   // eigener Stil (4)
       variants: wantsVariants() ? 2 : 1,   // mehrere Varianten (6)
+      industry: industryLabel(),           // Branchen-Kontext
     });
 
     if (result.needLogin) { openAuthModal('login'); setStatus(t('st_signin'), 'warn'); return; }
@@ -603,6 +664,7 @@ async function generateEmail(text, tone, length, formality, opts) {
     if (opts.subject)                       payload.subject  = true;           // Betreffzeile
     if (opts.variants && opts.variants > 1) payload.variants = opts.variants;  // Varianten
     if (opts.deescalate)                    payload.deescalate = true;         // Ärger entschärfen
+    if (opts.industry)                      payload.industry = opts.industry;  // Branchen-Kontext
   }
 
   let res;
@@ -1079,6 +1141,7 @@ const SET_EN = {
   refine_friendly: 'friendlier', refine_shorter: 'shorter', refine_formal: 'more formal', refine_assertive: 'more assertive',
   deescalate_btn: 'Calm it down', promo_line: 'Written with MailPilot · mailpilot-ai.com',
   set_promo: 'Add a "Written with MailPilot" line when copying',
+  set_industry: 'Industry', set_industry_hint: 'Templates and wording adapt to your industry.',
 };
 const SET_DE = {
   set_open: 'Einstellungen', set_title: 'Einstellungen',
@@ -1105,6 +1168,7 @@ const SET_DE = {
   refine_friendly: 'freundlicher', refine_shorter: 'kürzer', refine_formal: 'förmlicher', refine_assertive: 'bestimmter',
   deescalate_btn: 'Ärger entschärfen', promo_line: 'Geschrieben mit MailPilot · mailpilot-ai.com',
   set_promo: 'Beim Kopieren „Geschrieben mit MailPilot" anhängen',
+  set_industry: 'Branche', set_industry_hint: 'Vorlagen und Formulierungen passen sich deiner Branche an.',
 };
 if (typeof I18N !== 'undefined') { Object.assign(I18N.en, SET_EN); Object.assign(I18N.de, SET_DE); }
 
@@ -1156,6 +1220,11 @@ const settingsModal = htmlToEl(`
         </div>
       </section>
       <section class="set-section">
+        <div class="set-section__title" data-i18n="set_industry">Industry</div>
+        <select id="setIndustry" class="set-select"></select>
+        <p class="set-hint" data-i18n="set_industry_hint">Templates and wording adapt to your industry.</p>
+      </section>
+      <section class="set-section">
         <div class="set-section__title" data-i18n="set_account">Account</div>
         <div id="setAccountBody"></div>
       </section>
@@ -1195,6 +1264,15 @@ const promoBox = document.getElementById('setPromo');
 if (promoBox) {
   promoBox.checked = promoEnabled();
   promoBox.addEventListener('change', () => { try { localStorage.setItem(PROMO_KEY, promoBox.checked ? '1' : '0'); } catch {} });
+}
+const industrySel = document.getElementById('setIndustry');
+if (industrySel) {
+  industrySel.innerHTML = INDUSTRIES.map((x) => '<option value="' + x.id + '">' + escapeHtml(lang === 'en' ? x.en : x.de) + '</option>').join('');
+  industrySel.value = getIndustry();
+  industrySel.addEventListener('change', () => {
+    try { localStorage.setItem(INDUSTRY_KEY, industrySel.value); } catch {}
+    renderTemplateChips();
+  });
 }
 
 // Zahnrad öffnet das Panel und lädt Konto + Abo frisch.

@@ -249,6 +249,7 @@ export const handler = async (event) => {
   const wantSubject = body.subject === true;
   const variants = Math.min(3, Math.max(1, parseInt(body.variants, 10) || 1));
   const deescalate = body.deescalate === true;
+  const industry = String(body.industry ?? "").trim().slice(0, 80);   // Branchen-Kontext
 
   // Eingabe je nach Modus aufbereiten (Entschärfen > Antwort > normale Notizen).
   let userContent;
@@ -271,8 +272,11 @@ export const handler = async (event) => {
   const variantsRule = variants > 1
     ? `\n\nErzeuge ${variants} deutlich unterschiedliche Varianten der E-Mail. Trenne die Varianten durch eine eigene Zeile mit ausschließlich "#####". Keine Nummerierung, keine Kommentare.`
     : "";
+  const industryRule = industry
+    ? `\n\nDer Nutzer arbeitet in folgender Branche: ${industry}. Verwende die dort übliche Fachsprache, Anrede und Konventionen, ohne den vom Nutzer vorgegebenen Inhalt zu verändern.`
+    : "";
   const baseSystem = deescalate ? DEESCALATE_SYSTEM_PROMPT : (replyTo ? REPLY_SYSTEM_PROMPT : SYSTEM_PROMPT);
-  const system = baseSystem + subjectRule + variantsRule;
+  const system = baseSystem + industryRule + subjectRule + variantsRule;
 
   try {
     const baseTokens = length >= 67 || replyTo ? 3000 : 2000;

@@ -152,11 +152,11 @@ function buildSvg(L) {
   <!-- E-Mail-Text -->
   ${lines(L.email, 24, 216, 27, `font-family="${FF}" font-size="16" fill="#201f1e"`)}
 
-  <!-- Call-to-Action -->
-  <rect x="26" y="560" width="292" height="48" rx="24" fill="#000000" fill-opacity="0.12"/>
+  <!-- Call-to-Action (nur wenn L.cta gesetzt – Store-Screenshots ohne Marketing-Button) -->
+  ${L.cta ? `<rect x="26" y="560" width="292" height="48" rx="24" fill="#000000" fill-opacity="0.12"/>
   <rect x="24" y="556" width="292" height="48" rx="24" fill="#8b5cf6"/>
   <text x="170" y="586" text-anchor="middle" font-family="${FF}" font-size="16" font-weight="700" fill="#ffffff">${esc(L.cta)}</text>
-  <text x="340" y="586" font-family="${FF}" font-size="15" font-weight="600" fill="#7c3aed">mailpilot-ai.com</text>
+  <text x="340" y="586" font-family="${FF}" font-size="15" font-weight="600" fill="#7c3aed">mailpilot-ai.com</text>` : ''}
 
   <!-- Trennschatten zum Pane -->
   <rect x="${PANE_X - 5}" y="${TOP}" width="5" height="${H - TOP}" fill="#000000" fill-opacity="0.10"/>
@@ -211,7 +211,14 @@ function buildSvg(L) {
 </svg>`;
 }
 
-for (const [file, L] of [["og.png", DE], ["og-en.png", EN]]) {
-  await sharp(Buffer.from(buildSvg(L))).png().toFile(join(PUBLIC, file));
-  console.log("geschrieben:", file);
+export { buildSvg, DE, EN };
+
+// Nur beim direkten Aufruf rendern (damit der Import aus anderen Skripten
+// nicht ungewollt die OG-Bilder neu schreibt).
+import { pathToFileURL } from "node:url";
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  for (const [file, L] of [["og.png", DE], ["og-en.png", EN]]) {
+    await sharp(Buffer.from(buildSvg(L))).png().toFile(join(PUBLIC, file));
+    console.log("geschrieben:", file);
+  }
 }

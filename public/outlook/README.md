@@ -16,7 +16,11 @@ Office-Add-ins haben einen eigenen Kontext (kein geteilter Login). Daher:
 Task-Pane → `displayDialogAsync('/outlook/auth')` → Clerk-Login → `messageParent(token)`
 → Task-Pane nutzt das Token als `Authorization: Bearer …` fürs Backend.
 
-## Zum Ausprobieren (Sideload)
+## Installieren (Sideload)
+**Kinderleichte Anleitung mit kopierbarer Manifest-URL:** https://mailpilot-ai.com/outlook
+(Seite `app/outlook/page.jsx`).
+
+Kurz:
 **Outlook (Web/Neu):** Einstellungen → „Add-Ins abrufen" → „Meine Add-Ins" →
 „Benutzerdefiniertes Add-In hinzufügen" → „Aus URL" →
 `https://mailpilot-ai.com/outlook/manifest.xml`.
@@ -29,8 +33,8 @@ Task-Pane → `displayDialogAsync('/outlook/auth')` → Clerk-Login → `message
    Falls Login im Dialog hängt: in Clerk die Domain/Origin `mailpilot-ai.com` als
    erlaubt prüfen; Google-Login ggf. auf Redirect-Flow stellen (Popup-im-Dialog kann zicken).
 2. **Sideload + testen** (siehe oben): anmelden, generieren, einfügen.
-3. **Eigene Icons 16/32/80** hinterlegen (aktuell wird das App-Icon skaliert) und das
-   Manifest validieren (`npx office-addin-manifest validate manifest.xml`).
+3. ~~Eigene Icons 16/32/80 hinterlegen~~ **erledigt** — `icons/mp-16/32/80.png`, im
+   Manifest verdrahtet; Manifest besteht `npx office-addin-manifest validate`.
 4. **Veröffentlichen:** über **Microsoft AppSource** (Partner Center) oder zentral im
    Microsoft-365-Admin-Center bereitstellen.
 

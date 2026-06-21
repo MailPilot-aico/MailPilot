@@ -74,9 +74,9 @@
     </Hosts>
     <Resources>
       <bt:Images>
-        <bt:Image id="icon16" DefaultValue="https://mailpilot-ai.com/icons/icon-192.png" />
-        <bt:Image id="icon32" DefaultValue="https://mailpilot-ai.com/icons/icon-192.png" />
-        <bt:Image id="icon80" DefaultValue="https://mailpilot-ai.com/icons/icon-512.png" />
+        <bt:Image id="icon16" DefaultValue="https://mailpilot-ai.com/icons/mp-16.png" />
+        <bt:Image id="icon32" DefaultValue="https://mailpilot-ai.com/icons/mp-32.png" />
+        <bt:Image id="icon80" DefaultValue="https://mailpilot-ai.com/icons/mp-80.png" />
       </bt:Images>
       <bt:Urls>
         <bt:Url id="taskpaneUrl" DefaultValue="https://mailpilot-ai.com/outlook/taskpane.html" />

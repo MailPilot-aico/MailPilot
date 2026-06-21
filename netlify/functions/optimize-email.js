@@ -275,8 +275,11 @@ export const handler = async (event) => {
   const industryRule = industry
     ? `\n\nDer Nutzer arbeitet in folgender Branche: ${industry}. Verwende die dort übliche Fachsprache, Anrede und Konventionen, ohne den vom Nutzer vorgegebenen Inhalt zu verändern.`
     : "";
+  // Auto-Korrektur: Tipp-/Rechtschreib-/Grammatik- und Spracherkennungsfehler aus der
+  // Eingabe werden NICHT übernommen, sondern in der fertigen E-Mail korrekt geschrieben.
+  const correctionRule = `\n\nKorrigiere automatisch alle Rechtschreib-, Tipp- und Grammatikfehler sowie Spracherkennungsfehler aus der Eingabe. Übernimm Fehler NICHT 1:1 – die fertige E-Mail muss durchgehend fehlerfrei und korrekt geschrieben sein.`;
   const baseSystem = deescalate ? DEESCALATE_SYSTEM_PROMPT : (replyTo ? REPLY_SYSTEM_PROMPT : SYSTEM_PROMPT);
-  const system = baseSystem + industryRule + subjectRule + variantsRule;
+  const system = baseSystem + correctionRule + industryRule + subjectRule + variantsRule;
 
   try {
     const baseTokens = length >= 67 || replyTo ? 3000 : 2000;

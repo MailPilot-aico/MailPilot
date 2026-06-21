@@ -1248,6 +1248,26 @@ function applyTheme(theme) {
   document.querySelectorAll('[data-theme-set]').forEach((b) => b.classList.toggle('is-active', b.dataset.themeSet === t2));
 }
 
+/* ---- Outlook-Hinweisbanner ganz oben → /outlook (abweisbar, im App-Modus aus) ---- */
+(function mpOutlookBanner() {
+  try {
+    if (document.documentElement.classList.contains('app-mode')) return;     // im Tool-/PWA-Modus kein Marketing
+    if (localStorage.getItem('mp_outlook_banner') === 'off') return;          // schon weggeklickt
+  } catch (e) {}
+  const bar = htmlToEl(
+    '<div id="mpOutlookBar" style="background:linear-gradient(90deg,#170d2b,#241640);border-bottom:1px solid #2c2148;padding:9px 42px 9px 16px;display:flex;align-items:center;justify-content:center;position:relative;font-family:Inter,Segoe UI,system-ui,sans-serif;">'
+    + '<a href="/outlook" style="color:#cdbdf5;font-size:14px;font-weight:600;text-decoration:none;">✈ New: MailPilot works right inside Outlook — see how →</a>'
+    + '<button type="button" aria-label="Close" style="position:absolute;right:12px;top:50%;transform:translateY(-50%);background:none;border:none;color:#8b7fb0;font-size:18px;line-height:1;cursor:pointer;padding:2px 6px;">&times;</button>'
+    + '</div>'
+  );
+  document.body.insertBefore(bar, document.body.firstChild);
+  const x = bar.querySelector('button');
+  if (x) x.addEventListener('click', function () {
+    bar.remove();
+    try { localStorage.setItem('mp_outlook_banner', 'off'); } catch (e) {}
+  });
+})();
+
 /* ---- Zahnrad in die Kopfzeile + Settings-Modal in den Body injizieren ---- */
 const gearBtn = htmlToEl(`
   <button class="set-gear" id="settingsBtn" type="button" title="${t('set_open')}" aria-label="${t('set_open')}">

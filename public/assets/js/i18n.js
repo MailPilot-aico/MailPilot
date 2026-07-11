@@ -12,6 +12,10 @@
 const I18N = {
   /* =================== ENGLISH (Standard) =================== */
   en: {
+    set_brain: "My learned style",
+    set_brain_hint: "MailPilot learns your writing style from the emails you send — and uses it automatically.",
+    set_brain_empty: "Nothing learned yet — send a few emails and your style will appear here.",
+    set_brain_learning: "Learn from the emails I send",
     doc_title: "MailPilot — From notes to the perfect email",
     tagline: "From notes to the perfect email",
     hero_eyebrow: "AI email assistant — now with auto-translation",
@@ -164,6 +168,10 @@ const I18N = {
 
   /* =================== DEUTSCH =================== */
   de: {
+    set_brain: "Mein gelernter Stil",
+    set_brain_hint: "MailPilot lernt deinen Schreibstil aus den E-Mails, die du sendest – und nutzt ihn automatisch.",
+    set_brain_empty: "Noch nichts gelernt – sende ein paar Mails, dann erscheint dein Stil hier.",
+    set_brain_learning: "Aus meinen gesendeten Mails lernen",
     doc_title: "MailPilot — Aus Notizen wird die perfekte E-Mail",
     tagline: "Aus Notizen wird die perfekte E-Mail",
     hero_eyebrow: "KI-E-Mail-Assistent – jetzt mit Auto-Übersetzung",

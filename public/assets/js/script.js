@@ -1325,6 +1325,12 @@ const settingsModal = htmlToEl(`
         <p class="set-hint" data-i18n="set_style_hint">Optional — emails are written in your personal style.</p>
       </section>
       <section class="set-section">
+        <div class="set-section__title" data-i18n="set_brain">My learned style</div>
+        <p class="set-hint" data-i18n="set_brain_hint">MailPilot learns your writing style from the emails you send — and uses it automatically.</p>
+        <div id="setBrainSummary" class="set-sign" style="min-height:56px;white-space:pre-wrap;overflow:auto;opacity:.92;"></div>
+        <label class="opt-check" style="margin-top:10px;"><input type="checkbox" id="setLearning" /><span data-i18n="set_brain_learning">Learn from the emails I send</span></label>
+      </section>
+      <section class="set-section">
         <label class="opt-check" style="margin:0;"><input type="checkbox" id="setPromo" /><span data-i18n="set_promo">Add a "Written with MailPilot" line when copying</span></label>
       </section>
     </div>
@@ -1362,8 +1368,50 @@ if (industrySel) {
   });
 }
 
-// Zahnrad öffnet das Panel und lädt Konto + Abo frisch.
-gearBtn.addEventListener('click', () => { renderSettingsAccount(); renderSubscription(); openModal(settingsModal); });
+// MailPilot-Gehirn im Panel: gelernten Stil anzeigen + Lern-Schalter (ausfallsicher).
+async function mpBrainToken() {
+  try { if (window.Clerk && window.Clerk.session) return await window.Clerk.session.getToken(); } catch {}
+  return null;
+}
+async function renderBrain() {
+  const box = document.getElementById('setBrainSummary');
+  const toggle = document.getElementById('setLearning');
+  if (!box) return;
+  const token = await mpBrainToken();
+  if (!token) {
+    box.textContent = t('set_brain_empty');
+    if (toggle) { toggle.checked = true; toggle.disabled = true; }
+    return;
+  }
+  try {
+    const res = await fetch(API_BASE + '/.netlify/functions/profile', { headers: { 'Authorization': 'Bearer ' + token } });
+    if (!res.ok) { box.textContent = t('set_brain_empty'); return; }
+    const p = await res.json();
+    const n = p.sample_count || 0;
+    if (p.style_summary && p.style_summary.trim()) {
+      const learned = lang === 'en' ? ('Learned from ' + n + ' email' + (n === 1 ? '' : 's')) : ('Gelernt aus ' + n + ' Mail' + (n === 1 ? '' : 's'));
+      box.textContent = p.style_summary + (n ? '\n\n(' + learned + ')' : '');
+    } else {
+      box.textContent = t('set_brain_empty');
+    }
+    if (toggle) { toggle.disabled = false; toggle.checked = p.learning !== false; }
+  } catch { box.textContent = t('set_brain_empty'); }
+}
+// Lern-Schalter: Änderung serverseitig speichern (fire-and-forget).
+(function () {
+  const toggle = document.getElementById('setLearning');
+  if (!toggle) return;
+  toggle.addEventListener('change', async () => {
+    const token = await mpBrainToken();
+    if (!token) return;
+    try {
+      await fetch(API_BASE + '/.netlify/functions/profile', { method: 'PUT', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token }, body: JSON.stringify({ learning: toggle.checked }) });
+    } catch {}
+  });
+})();
+
+// Zahnrad öffnet das Panel und lädt Konto + Abo + Gehirn frisch.
+gearBtn.addEventListener('click', () => { renderSettingsAccount(); renderSubscription(); renderBrain(); openModal(settingsModal); });
 // Schließen (×/Hintergrund) – Escape übernimmt der globale Handler weiter oben.
 settingsModal.querySelectorAll('[data-close]').forEach((el) => el.addEventListener('click', () => closeModal(settingsModal)));
 // Theme-Umschalter

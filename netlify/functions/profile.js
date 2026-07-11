@@ -23,7 +23,7 @@ const TONE_KEYS = ["professionell", "freundlich", "foermlich", "locker"];
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, PUT, POST, OPTIONS",
+  "Access-Control-Allow-Methods": "GET, PUT, POST, DELETE, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type, Authorization",
 };
 
@@ -158,6 +158,18 @@ export const handler = async (event) => {
       return resp(200, { ...publicView(saved), learned: true });
     } catch (err) {
       return resp(500, { error: err?.message || "Lernen fehlgeschlagen." });
+    }
+  }
+
+  // ---- Gelernten Stil zurücksetzen ("Recht auf Vergessen") ----
+  // Leert nur den GELERNTEN Teil (style_summary + samples); Name, Signatur,
+  // Branche und Regler bleiben erhalten (das sind bewusste Einstellungen).
+  if (event.httpMethod === "DELETE") {
+    try {
+      const saved = await upsertProfile(accountId, { style_summary: "", samples: [] });
+      return resp(200, { ...publicView(saved), reset: true });
+    } catch (err) {
+      return resp(500, { error: err?.message || "Zurücksetzen fehlgeschlagen." });
     }
   }
 

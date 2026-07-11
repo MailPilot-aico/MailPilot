@@ -1329,6 +1329,7 @@ const settingsModal = htmlToEl(`
         <p class="set-hint" data-i18n="set_brain_hint">MailPilot learns your writing style from the emails you send — and uses it automatically.</p>
         <div id="setBrainSummary" class="set-sign" style="min-height:56px;white-space:pre-wrap;overflow:auto;opacity:.92;"></div>
         <label class="opt-check" style="margin-top:10px;"><input type="checkbox" id="setLearning" /><span data-i18n="set_brain_learning">Learn from the emails I send</span></label>
+        <button type="button" id="setBrainReset" data-i18n="set_brain_reset" style="display:none;margin-top:8px;background:none;border:none;color:#a78bfa;cursor:pointer;padding:0;font:inherit;text-decoration:underline;">Reset learned style</button>
       </section>
       <section class="set-section">
         <label class="opt-check" style="margin:0;"><input type="checkbox" id="setPromo" /><span data-i18n="set_promo">Add a "Written with MailPilot" line when copying</span></label>
@@ -1376,26 +1377,31 @@ async function mpBrainToken() {
 async function renderBrain() {
   const box = document.getElementById('setBrainSummary');
   const toggle = document.getElementById('setLearning');
+  const resetBtn = document.getElementById('setBrainReset');
+  const hideReset = () => { if (resetBtn) resetBtn.style.display = 'none'; };
   if (!box) return;
   const token = await mpBrainToken();
   if (!token) {
     box.textContent = t('set_brain_empty');
     if (toggle) { toggle.checked = true; toggle.disabled = true; }
+    hideReset();
     return;
   }
   try {
     const res = await fetch(API_BASE + '/.netlify/functions/profile', { headers: { 'Authorization': 'Bearer ' + token } });
-    if (!res.ok) { box.textContent = t('set_brain_empty'); return; }
+    if (!res.ok) { box.textContent = t('set_brain_empty'); hideReset(); return; }
     const p = await res.json();
     const n = p.sample_count || 0;
     if (p.style_summary && p.style_summary.trim()) {
       const learned = lang === 'en' ? ('Learned from ' + n + ' email' + (n === 1 ? '' : 's')) : ('Gelernt aus ' + n + ' Mail' + (n === 1 ? '' : 's'));
       box.textContent = p.style_summary + (n ? '\n\n(' + learned + ')' : '');
+      if (resetBtn) resetBtn.style.display = '';
     } else {
       box.textContent = t('set_brain_empty');
+      hideReset();
     }
     if (toggle) { toggle.disabled = false; toggle.checked = p.learning !== false; }
-  } catch { box.textContent = t('set_brain_empty'); }
+  } catch { box.textContent = t('set_brain_empty'); hideReset(); }
 }
 // Lern-Schalter: Änderung serverseitig speichern (fire-and-forget).
 (function () {
@@ -1406,6 +1412,21 @@ async function renderBrain() {
     if (!token) return;
     try {
       await fetch(API_BASE + '/.netlify/functions/profile', { method: 'PUT', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token }, body: JSON.stringify({ learning: toggle.checked }) });
+    } catch {}
+  });
+})();
+
+// "Gelernten Stil zurücksetzen": nach Rückfrage per DELETE leeren, dann neu rendern.
+(function () {
+  const btn = document.getElementById('setBrainReset');
+  if (!btn) return;
+  btn.addEventListener('click', async () => {
+    if (!confirm(t('set_brain_reset_confirm'))) return;
+    const token = await mpBrainToken();
+    if (!token) return;
+    try {
+      const res = await fetch(API_BASE + '/.netlify/functions/profile', { method: 'DELETE', headers: { 'Authorization': 'Bearer ' + token } });
+      if (res.ok) { toast(t('set_brain_reset_done'), 'ok'); renderBrain(); }
     } catch {}
   });
 })();

@@ -8,7 +8,9 @@
   functions = "netlify/functions"
 
 [build.environment]
-  NODE_VERSION = "20"
+  # Node 22: bringt natives WebSocket mit (supabase-js braucht das ab v2.1xx,
+  # sonst wirft der Client-Init auf Node 20 "without native WebSocket support").
+  NODE_VERSION = "22"
 
 # Offizielles Next.js-Plugin (wird von Netlify i. d. R. automatisch erkannt;
 # hier explizit, damit der Build deterministisch ist).

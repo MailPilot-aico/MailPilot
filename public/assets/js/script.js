@@ -643,6 +643,9 @@ function setStatus(text, type) {
 /* ---- In die Zwischenablage kopieren ---- */
 copyBtn.addEventListener('click', async () => {
   if (!output.value) return;
+  // MailPilot-Gehirn: aus der wirklich kopierten/gesendeten Mail den Stil weiterlernen
+  // (fire-and-forget; window.mpLearnFrom respektiert Login + Lern-Schalter).
+  try { if (window.mpLearnFrom) window.mpLearnFrom(output.value); } catch {}
   // Beim Kopieren den (abschaltbaren) MailPilot-Hinweis anhängen → virale Verbreitung.
   let txt = output.value;
   if (promoEnabled()) txt = txt.replace(/\s+$/, '') + '\n\n' + getPromoLine();
@@ -1579,4 +1582,98 @@ renderSettingsAccount();
   window.history.replaceState({}, '', window.location.pathname + (query ? '?' + query : ''));
   if (status === 'success') alert(t('checkout_success'));
   else if (status === 'cancel') alert(t('checkout_canceled'));
+})();
+
+/* =========================================================
+   MailPilot-Gehirn — Stil-Profil mit dem Server synchronisieren.
+   ---------------------------------------------------------
+   - Login: gespeichertes Profil laden → ein neues Gerät erbt Name/
+     Signatur/Branche des Nutzers (leere lokale Felder werden gefüllt).
+   - Einstellungen ändern: Profil serverseitig speichern.
+   - "Mein Stil"-Beispiele werden zum Lernen an den Server geschickt,
+     der daraus einen kompakten Stil destilliert (Endpunkt: /functions/profile).
+   Alles ausfallsicher (try/catch, fire-and-forget): schlägt der Server
+   fehl (z. B. Profil-Tabelle noch nicht angelegt), läuft die App
+   UNVERÄNDERT weiter.
+   ========================================================= */
+(() => {
+  const PROFILE_ENDPOINT = API_BASE + '/.netlify/functions/profile';
+
+  function loggedIn() { return Boolean(currentUser && currentUser.jwt); }
+  async function authHeaders() {
+    const h = { 'Content-Type': 'application/json' };
+    try { if (loggedIn()) h['Authorization'] = `Bearer ${await currentUser.jwt()}`; } catch {}
+    return h;
+  }
+
+  // Server-Profil laden und LEERE lokale Felder daraus füllen (lokal hat Vorrang).
+  async function profilePull() {
+    if (!loggedIn()) return;
+    let data;
+    try {
+      const res = await fetch(PROFILE_ENDPOINT, { headers: await authHeaders() });
+      if (!res.ok) return;
+      data = await res.json();
+    } catch { return; }
+    if (!data) return;
+    const setIfEmpty = (key, val) => {
+      if (!val) return;
+      try { if (!localStorage.getItem(key)) localStorage.setItem(key, val); } catch {}
+    };
+    setIfEmpty(NAME_KEY, data.sender_name);
+    setIfEmpty(SIG_KEY, data.signature);
+    setIfEmpty(INDUSTRY_KEY, data.industry);
+    // Offene Einstellungsfelder aktualisieren, falls das Panel schon gebaut ist.
+    const nf = document.getElementById('setName');
+    if (nf && !nf.value && data.sender_name) nf.value = data.sender_name;
+    const sf = document.getElementById('setSignature');
+    if (sf && !sf.value && data.signature) sf.value = data.signature;
+    const isel = document.getElementById('setIndustry');
+    if (isel && data.industry) isel.value = data.industry;
+  }
+
+  // Aktuelle Einstellungen serverseitig speichern (verzögert, um nicht bei jedem
+  // Tastendruck zu senden) und Beispiel-Mails zum Lernen schicken.
+  let pushTimer = null;
+  function profilePushSoon() { clearTimeout(pushTimer); pushTimer = setTimeout(profilePush, 1200); }
+  async function profilePush() {
+    if (!loggedIn()) return;
+    const headers = await authHeaders();
+    const body = { sender_name: getName(), signature: getSignature(), industry: getIndustry() };
+    try { await fetch(PROFILE_ENDPOINT, { method: 'PUT', headers, body: JSON.stringify(body) }); } catch {}
+    const style = (getStyle() || '').trim();
+    if (style) {
+      try { await fetch(PROFILE_ENDPOINT, { method: 'POST', headers, body: JSON.stringify({ learnFrom: style }) }); } catch {}
+    }
+  }
+
+  // Aus einer wirklich verschickten/eingefügten E-Mail lernen – global aufrufbar,
+  // damit der Einfügen-/Kopieren-Knopf das später auslösen kann.
+  window.mpLearnFrom = async function (text) {
+    if (!loggedIn() || !text || !String(text).trim()) return;
+    try {
+      await fetch(PROFILE_ENDPOINT, { method: 'POST', headers: await authHeaders(), body: JSON.stringify({ learnFrom: String(text) }) });
+    } catch {}
+  };
+
+  // Einstellungsfelder beobachten → verzögert speichern (zusätzlich zu den
+  // bestehenden localStorage-Handlern, nicht störend).
+  function wireFields() {
+    ['setName', 'setSignature', 'setIndustry', 'setStyle'].forEach((id) => {
+      const el = document.getElementById(id);
+      if (el && !el.dataset.mpSync) {
+        el.dataset.mpSync = '1';
+        el.addEventListener('change', profilePushSoon);
+        el.addEventListener('blur', profilePushSoon);
+      }
+    });
+  }
+  wireFields();
+
+  // Auf Login warten: einmalig Profil laden, sobald der Nutzer gesetzt ist.
+  let pulled = false;
+  const iv = setInterval(() => {
+    if (loggedIn() && !pulled) { pulled = true; clearInterval(iv); profilePull(); wireFields(); }
+  }, 1500);
+  setTimeout(() => clearInterval(iv), 60000); // nach 1 Minute nicht mehr warten
 })();

@@ -34,3 +34,26 @@ create index if not exists devices_account_idx on public.devices (account_id);
 --    den Netlify-Funktionen. Maximale Sicherheit.
 alter table public.subscriptions enable row level security;
 alter table public.devices       enable row level security;
+
+-- 4) Persönliches Stil-Profil je Konto ("MailPilot-Gehirn").
+--    Speichert Name, Signatur, Branche, Standard-Regler und den
+--    GELERNTEN Schreibstil, damit MailPilot pro Nutzer nicht mehr
+--    bei null anfängt. Wächst mit: aus verschickten/beispielhaften
+--    E-Mails wird der Stil laufend verfeinert.
+create table if not exists public.profiles (
+  account_id         text primary key,                    -- Clerk org- oder user-id
+  sender_name        text,                                 -- Name für Grußformel/Signatur
+  signature          text,                                 -- feste Signatur (optional)
+  industry           text,                                 -- Branchen-Kontext
+  default_tone       text,                                 -- Standard-Tonfall (professionell|freundlich|foermlich|locker)
+  default_length     integer,                              -- 0–100
+  default_formality  integer,                              -- 0–100
+  style_summary      text,                                 -- gelernter Schreibstil (kompakt, wird in den Prompt gesetzt)
+  samples            jsonb   not null default '[]'::jsonb, -- letzte Beispiel-/Sende-Mails (Rohtext, zum Lernen)
+  learning           boolean not null default true,        -- automatisch aus Sende-Mails weiterlernen?
+  updated_at         timestamptz not null default now()
+);
+
+-- RLS an, KEINE Policies für anon/authenticated: Zugriff nur serverseitig
+-- über den service_role-Key in den Netlify-Funktionen (wie subscriptions/devices).
+alter table public.profiles enable row level security;

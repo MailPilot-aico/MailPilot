@@ -15,6 +15,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { connectLambda, getStore } from "@netlify/blobs";
 import { verifyToken } from "@clerk/backend";
+import { loadProfile } from "./lib/profile.js";
 
 // Anthropic-Client erst bei Bedarf erzeugen. Würde er beim Laden des Moduls
 // erstellt und fehlte der ANTHROPIC_API_KEY, würde die GANZE Funktion abstürzen
@@ -252,6 +253,16 @@ export const handler = async (event) => {
   const industry = String(body.industry ?? "").trim().slice(0, 80);   // Branchen-Kontext
   const senderName = String(body.senderName ?? "").trim().slice(0, 80); // Absender-Name aus den Einstellungen
 
+  // MailPilot-Gehirn: gespeichertes Stil-Profil des Kontos laden (best effort) und
+  // fehlende Angaben daraus ergänzen. Der Request hat immer Vorrang – nur was NICHT
+  // mitgeschickt wurde, kommt aus dem gelernten Profil. Fällt Supabase aus → null,
+  // dann verhält sich alles exakt wie vorher.
+  const profile = await loadProfile(accountId);
+  const effIndustry   = industry   || (profile?.industry || "");
+  const effSenderName = senderName || (profile?.sender_name || "");
+  const styleSummary  = profile?.style_summary || "";
+  const signature     = String(profile?.signature || "").trim();
+
   // Eingabe je nach Modus aufbereiten (Entschärfen > Antwort > normale Notizen).
   let userContent;
   if (deescalate) {
@@ -273,19 +284,30 @@ export const handler = async (event) => {
   const variantsRule = variants > 1
     ? `\n\nErzeuge ${variants} deutlich unterschiedliche Varianten der E-Mail. Trenne die Varianten durch eine eigene Zeile mit ausschließlich "#####". Keine Nummerierung, keine Kommentare.`
     : "";
-  const industryRule = industry
-    ? `\n\nDer Nutzer arbeitet in folgender Branche: ${industry}. Verwende die dort übliche Fachsprache, Anrede und Konventionen, ohne den vom Nutzer vorgegebenen Inhalt zu verändern.`
+  const industryRule = effIndustry
+    ? `\n\nDer Nutzer arbeitet in folgender Branche: ${effIndustry}. Verwende die dort übliche Fachsprache, Anrede und Konventionen, ohne den vom Nutzer vorgegebenen Inhalt zu verändern.`
     : "";
   // Auto-Korrektur: Tipp-/Rechtschreib-/Grammatik- und Spracherkennungsfehler aus der
   // Eingabe werden NICHT übernommen, sondern in der fertigen E-Mail korrekt geschrieben.
   const correctionRule = `\n\nKorrigiere automatisch alle Rechtschreib-, Tipp- und Grammatikfehler sowie Spracherkennungsfehler aus der Eingabe. Übernimm Fehler NICHT 1:1 – die fertige E-Mail muss durchgehend fehlerfrei und korrekt geschrieben sein.`;
   // Persönlicher Name aus den Einstellungen: direkt in die Grußformel setzen,
   // statt einen [Name]-Platzhalter zu hinterlassen.
-  const nameRule = senderName
-    ? `\n\nDer Absender (Verfasser dieser E-Mail) heißt "${senderName}". Setze GENAU diesen Namen in die Grußformel bzw. Signatur am Ende der E-Mail. Verwende dort KEINEN Namens-Platzhalter wie [Name].`
+  // Name nur einsetzen, wenn KEINE feste Signatur hinterlegt ist (die Signatur
+  // bringt den Namen ohnehin mit) – sonst stünde der Name doppelt am Ende.
+  const nameRule = (!signature && effSenderName)
+    ? `\n\nDer Absender (Verfasser dieser E-Mail) heißt "${effSenderName}". Setze GENAU diesen Namen in die Grußformel bzw. Signatur am Ende der E-Mail. Verwende dort KEINEN Namens-Platzhalter wie [Name].`
+    : "";
+  // Feste Signatur aus dem Profil: unverändert ans Ende setzen.
+  const signatureRule = signature
+    ? `\n\nBeende die E-Mail mit GENAU dieser Signatur des Absenders, unverändert (statt einer erfundenen Grußformel/Signatur):\n${signature}`
+    : "";
+  // Gelernter persönlicher Stil (MailPilot-Gehirn): Ton/Anrede/Wortwahl übernehmen,
+  // aber KEINE konkreten Inhalte aus früheren Mails.
+  const styleSummaryRule = styleSummary
+    ? `\n\nSchreibe im persönlichen, zuvor gelernten Stil des Absenders. Merkmale dieses Stils:\n${styleSummary}\nÜbernimm diesen Stil (Ton, Anrede, Grußformel, Wortwahl, Förmlichkeit), NICHT konkrete Inhalte aus früheren E-Mails.`
     : "";
   const baseSystem = deescalate ? DEESCALATE_SYSTEM_PROMPT : (replyTo ? REPLY_SYSTEM_PROMPT : SYSTEM_PROMPT);
-  const system = baseSystem + correctionRule + nameRule + industryRule + subjectRule + variantsRule;
+  const system = baseSystem + correctionRule + styleSummaryRule + nameRule + signatureRule + industryRule + subjectRule + variantsRule;
 
   try {
     const baseTokens = length >= 67 || replyTo ? 3000 : 2000;

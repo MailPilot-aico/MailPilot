@@ -19,3 +19,14 @@
 
 [functions]
   node_bundler = "esbuild"
+
+# Sicherheits-Header für alle Seiten.
+# Bewusst KEIN X-Frame-Options/frame-ancestors: das Outlook-Add-in
+# (outlook/taskpane.html) muss in Outlook eingebettet werden dürfen.
+# Mikrofon bleibt für die eigene Origin erlaubt (Spracheingabe „Sprechen").
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    Permissions-Policy = "camera=(), geolocation=(), microphone=(self)"

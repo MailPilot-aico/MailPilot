@@ -49,6 +49,7 @@ create table if not exists public.profiles (
   default_length     integer,                              -- 0–100
   default_formality  integer,                              -- 0–100
   style_summary      text,                                 -- gelernter Schreibstil (kompakt, wird in den Prompt gesetzt)
+  preferred_lang     text,                                  -- bevorzugte Übersetzungs-Zielsprache (z. B. 'en', 'pt-BR')
   samples            jsonb   not null default '[]'::jsonb, -- letzte Beispiel-/Sende-Mails (Rohtext, zum Lernen)
   learning           boolean not null default true,        -- automatisch aus Sende-Mails weiterlernen?
   updated_at         timestamptz not null default now()

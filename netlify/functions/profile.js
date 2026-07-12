@@ -58,7 +58,7 @@ function clampScaleOrNull(v) {
 // samples bleiben serverseitig, nach außen nur die Anzahl + ob schon ein Stil gelernt wurde.
 function publicView(p) {
   if (!p) {
-    return { sender_name: "", signature: "", industry: "", default_tone: "", default_length: null, default_formality: null, style_summary: "", learning: true, sample_count: 0, has_style: false };
+    return { sender_name: "", signature: "", industry: "", default_tone: "", default_length: null, default_formality: null, preferred_lang: "", style_summary: "", learning: true, sample_count: 0, has_style: false };
   }
   return {
     sender_name: p.sender_name || "",
@@ -67,6 +67,7 @@ function publicView(p) {
     default_tone: p.default_tone || "",
     default_length: p.default_length ?? null,
     default_formality: p.default_formality ?? null,
+    preferred_lang: p.preferred_lang || "",
     style_summary: p.style_summary || "",
     learning: p.learning !== false,
     sample_count: Array.isArray(p.samples) ? p.samples.length : 0,
@@ -136,6 +137,11 @@ export const handler = async (event) => {
     if (body.default_length !== undefined)    fields.default_length    = clampScaleOrNull(body.default_length);
     if (body.default_formality !== undefined) fields.default_formality = clampScaleOrNull(body.default_formality);
     if (body.learning !== undefined)     fields.learning     = body.learning !== false;
+    // Bevorzugte Übersetzungs-Zielsprache: nur gültige Sprachcodes (z. B. 'en', 'pt-BR').
+    if (body.preferred_lang !== undefined) {
+      const pl = String(body.preferred_lang || "").trim();
+      fields.preferred_lang = /^[a-z]{2}(-[A-Z]{2})?$/.test(pl) ? pl : null;
+    }
 
     if (Object.keys(fields).length === 0) return resp(400, { error: "Keine gültigen Felder zum Speichern." });
 

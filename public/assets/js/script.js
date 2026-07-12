@@ -1082,7 +1082,9 @@ function updateTranslateUI() {
    Nutzer für diese E-Mail keine abweichende Zielsprache manuell gewählt hat. */
 async function applyDefaultTranslation() {
   if (!hasRealResult || outputLangManual) return;
-  const target = SUPPORTED.includes(lang) ? lang : 'de';
+  // MailPilot-Gehirn: gemerkte Lieblings-Zielsprache hat Vorrang vor der UI-Sprache.
+  const pref = window.__mpPrefLang;
+  const target = (pref && XLATE_NAMES[pref]) ? pref : (SUPPORTED.includes(lang) ? lang : 'de');
   outputLang = target;
   updateTranslateUI();
   await translateResult(target);   // 'de' = Original wiederherstellen, sonst per KI übersetzen
@@ -1093,6 +1095,22 @@ async function selectTargetLang(code) {
   outputLang = code;
   outputLangManual = true;
   updateTranslateUI();
+
+  // MailPilot-Gehirn: die manuell gewählte Zielsprache als Vorliebe merken
+  // (sofort für diese Sitzung + serverseitig fürs nächste Mal, fire-and-forget).
+  window.__mpPrefLang = code;
+  (async () => {
+    try {
+      if (!(window.Clerk && window.Clerk.session)) return;
+      const token = await window.Clerk.session.getToken();
+      if (!token) return;
+      await fetch(API_BASE + '/.netlify/functions/profile', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+        body: JSON.stringify({ preferred_lang: code }),
+      });
+    } catch {}
+  })();
 
   // Noch kein echtes Ergebnis → Vorschau sofort in die Zielsprache umschalten
   if (!hasRealResult) {
@@ -1754,6 +1772,8 @@ renderSettingsAccount();
     setIfEmpty(INDUSTRY_KEY, data.industry);
     // Bevorzugte Regler (Ton/Länge/Förmlichkeit) aus dem Profil in die UI übernehmen.
     if (typeof mpApplyPrefs === 'function') mpApplyPrefs(data);
+    // Gemerkte Lieblings-Zielsprache übernehmen (greift bei der nächsten Optimierung).
+    if (data.preferred_lang && XLATE_NAMES[data.preferred_lang]) window.__mpPrefLang = data.preferred_lang;
     // Offene Einstellungsfelder aktualisieren, falls das Panel schon gebaut ist.
     const nf = document.getElementById('setName');
     if (nf && !nf.value && data.sender_name) nf.value = data.sender_name;

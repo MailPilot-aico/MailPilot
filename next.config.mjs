@@ -1,7 +1,24 @@
 import { withSentryConfig } from "@sentry/nextjs";
 
 /** @type {import('next').NextConfig} */
-const nextConfig = {};
+const nextConfig = {
+  // Sicherheits-Header auch für Next-gerenderte SEITEN (netlify.toml-Header
+  // greifen mit dem Netlify-Next-Plugin nur für statische Dateien).
+  // Bewusst KEIN X-Frame-Options: das Outlook-Add-in muss einbettbar bleiben.
+  // Mikrofon bleibt für die eigene Origin erlaubt (Spracheingabe „Sprechen").
+  async headers() {
+    return [
+      {
+        source: "/:path*",
+        headers: [
+          { key: "X-Content-Type-Options", value: "nosniff" },
+          { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+          { key: "Permissions-Policy", value: "camera=(), geolocation=(), microphone=(self)" },
+        ],
+      },
+    ];
+  },
+};
 
 export default withSentryConfig(nextConfig, {
   // For all available options, see:

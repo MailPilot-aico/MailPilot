@@ -298,6 +298,24 @@ async function showResult(rawEmail, subject, doTranslate) {
   if (doTranslate) await applyDefaultTranslation();
 }
 
+// „In deinem gelernten Stil"-Hinweis unter der erzeugten Mail – nur bei echter KI
+// UND wenn der Nutzer einen gelernten Stil hat (window.__mpHasStyle). Ausfallsicher:
+// kein Flag / nicht eingeloggt / Demo → kein Badge.
+function updateStyleBadge(isApi) {
+  if (!output) return;
+  const show = Boolean(isApi && currentUser && window.__mpHasStyle);
+  let badge = document.getElementById('mpStyleBadge');
+  if (!badge) {
+    if (!show) return;
+    badge = document.createElement('div');
+    badge.id = 'mpStyleBadge';
+    badge.style.cssText = 'margin:8px 0 0;font-size:13px;color:#a78bfa;display:flex;align-items:center;gap:6px;';
+    output.insertAdjacentElement('afterend', badge);
+  }
+  badge.textContent = '✨ ' + t('result_styled');
+  badge.style.display = show ? 'flex' : 'none';
+}
+
 // Varianten-Umschalter (Variante 1 / 2 / …) rendern.
 function renderVariantSwitcher() {
   const row = document.getElementById('variantRow');
@@ -570,6 +588,7 @@ async function runDeescalate() {
     setStatus(result.source === 'api' ? t('st_ready') : t('st_demo'), result.source === 'api' ? 'ok' : 'warn');
     if (typeof result.remaining === 'number') setRemaining(result.remaining);
     await showResult(resultVariants[0].email, resultVariants[0].subject, result.source === 'api');
+    updateStyleBadge(result.source === 'api');
     setRefineEnabled(true);
   } catch (err) { console.error(err); setStatus(t('st_error'), 'error'); }
   finally { setLoading(false); }
@@ -618,6 +637,7 @@ async function runOptimize() {
     if (typeof result.remaining === 'number') setRemaining(result.remaining);
     // Erste Variante anzeigen (Signatur einsetzen + ggf. in die Standardsprache übersetzen).
     await showResult(resultVariants[0].email, resultVariants[0].subject, result.source === 'api');
+    updateStyleBadge(result.source === 'api');
     setRefineEnabled(true);
   } catch (err) {
     console.error(err);
@@ -1391,6 +1411,7 @@ async function renderBrain() {
     const res = await fetch(API_BASE + '/.netlify/functions/profile', { headers: { 'Authorization': 'Bearer ' + token } });
     if (!res.ok) { box.textContent = t('set_brain_empty'); hideReset(); return; }
     const p = await res.json();
+    window.__mpHasStyle = Boolean(p.style_summary && p.style_summary.trim());
     const n = p.sample_count || 0;
     if (p.style_summary && p.style_summary.trim()) {
       const learned = lang === 'en' ? ('Learned from ' + n + ' email' + (n === 1 ? '' : 's')) : ('Gelernt aus ' + n + ' Mail' + (n === 1 ? '' : 's'));
@@ -1685,6 +1706,7 @@ renderSettingsAccount();
       data = await res.json();
     } catch { return; }
     if (!data) return;
+    window.__mpHasStyle = Boolean(data.has_style);
     const setIfEmpty = (key, val) => {
       if (!val) return;
       try { if (!localStorage.getItem(key)) localStorage.setItem(key, val); } catch {}
@@ -1721,7 +1743,8 @@ renderSettingsAccount();
   window.mpLearnFrom = async function (text) {
     if (!loggedIn() || !text || !String(text).trim()) return;
     try {
-      await fetch(PROFILE_ENDPOINT, { method: 'POST', headers: await authHeaders(), body: JSON.stringify({ learnFrom: String(text) }) });
+      const res = await fetch(PROFILE_ENDPOINT, { method: 'POST', headers: await authHeaders(), body: JSON.stringify({ learnFrom: String(text) }) });
+      if (res.ok) { const d = await res.json().catch(() => null); if (d && d.has_style) window.__mpHasStyle = true; }
     } catch {}
   };
 

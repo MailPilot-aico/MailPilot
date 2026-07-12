@@ -549,6 +549,44 @@ if (formRange) {
   formRange.addEventListener('input', () => { activeFormality = +formRange.value; updateSliderLabels(); });
 }
 
+/* ---- MailPilot-Gehirn: bevorzugte Regler (Ton/Länge/Förmlichkeit) merken ----
+   Übernimmt gespeicherte Vorlieben in die UI und speichert Änderungen server-
+   seitig (geräteübergreifend). Alles ausfallsicher – ohne Login/Server bleibt
+   einfach alles beim Alten. */
+function mpApplyPrefs(p) {
+  try {
+    if (!p) return;
+    if (p.default_tone) {
+      activeTone = p.default_tone;
+      tonePills.forEach((pill) => {
+        const on = pill.dataset.tone === p.default_tone;
+        pill.classList.toggle('is-active', on);
+        pill.setAttribute('aria-pressed', on ? 'true' : 'false');
+      });
+    }
+    if (p.default_length != null && lenRange) { lenRange.value = p.default_length; activeLength = +p.default_length; }
+    if (p.default_formality != null && formRange) { formRange.value = p.default_formality; activeFormality = +p.default_formality; }
+    updateSliderLabels();
+  } catch {}
+}
+let mpPrefsTimer = null;
+function mpSavePrefsSoon() { clearTimeout(mpPrefsTimer); mpPrefsTimer = setTimeout(mpSavePrefs, 1000); }
+async function mpSavePrefs() {
+  try {
+    if (!(window.Clerk && window.Clerk.session)) return;
+    const token = await window.Clerk.session.getToken();
+    if (!token) return;
+    await fetch(API_BASE + '/.netlify/functions/profile', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+      body: JSON.stringify({ default_tone: activeTone, default_length: activeLength, default_formality: activeFormality }),
+    });
+  } catch {}
+}
+tonePills.forEach((pill) => pill.addEventListener('click', mpSavePrefsSoon));
+if (lenRange)  lenRange.addEventListener('change', mpSavePrefsSoon);
+if (formRange) formRange.addEventListener('change', mpSavePrefsSoon);
+
 /* ---- Hauptaktion: E-Mail optimieren ---- */
 optimizeBtn.addEventListener('click', runOptimize);
 input.addEventListener('keydown', (e) => {
@@ -1714,6 +1752,8 @@ renderSettingsAccount();
     setIfEmpty(NAME_KEY, data.sender_name);
     setIfEmpty(SIG_KEY, data.signature);
     setIfEmpty(INDUSTRY_KEY, data.industry);
+    // Bevorzugte Regler (Ton/Länge/Förmlichkeit) aus dem Profil in die UI übernehmen.
+    if (typeof mpApplyPrefs === 'function') mpApplyPrefs(data);
     // Offene Einstellungsfelder aktualisieren, falls das Panel schon gebaut ist.
     const nf = document.getElementById('setName');
     if (nf && !nf.value && data.sender_name) nf.value = data.sender_name;

@@ -181,8 +181,23 @@
     }
     function insertIntoMail() {
       if (!ready || !Office.context || !Office.context.mailbox) { setStatus('Das Einfügen funktioniert nur im Outlook-Schreibfenster.'); return; }
-      Office.context.mailbox.item.body.setSelectedDataAsync(textToHtml($('out').value), { coercionType: Office.CoercionType.Html },
-        function (r) { setStatus(r.status === Office.AsyncResultStatus.Succeeded ? 'In die E-Mail eingefügt ✓' : 'Einfügen fehlgeschlagen.'); });
+      var mailText = $('out').value;
+      Office.context.mailbox.item.body.setSelectedDataAsync(textToHtml(mailText), { coercionType: Office.CoercionType.Html },
+        function (r) {
+          var ok = r.status === Office.AsyncResultStatus.Succeeded;
+          setStatus(ok ? 'In die E-Mail eingefügt ✓' : 'Einfügen fehlgeschlagen.');
+          // MailPilot-Gehirn: aus der wirklich eingefügten E-Mail den Stil weiterlernen
+          // (fire-and-forget; Backend respektiert den Lern-Schalter des Nutzers).
+          if (ok && authToken && mailText) {
+            try {
+              fetch('https://mailpilot-ai.com/.netlify/functions/profile', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + authToken },
+                body: JSON.stringify({ learnFrom: mailText })
+              }).catch(function () {});
+            } catch (e) {}
+          }
+        });
     }
 
     document.addEventListener('DOMContentLoaded', function () {

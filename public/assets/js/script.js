@@ -350,7 +350,7 @@ async function doRefine(instr) {
     const sub = resultVariants[currentVariant] ? resultVariants[currentVariant].subject : '';
     await showResult(result.email, sub, false);
     setStatus(result.source === 'api' ? t('st_ready') : t('st_demo'), result.source === 'api' ? 'ok' : 'warn');
-    if (typeof result.remaining === 'number') setRemaining(result.remaining);
+    if (typeof result.remaining === 'number') setRemaining(result.remaining, result.unlimited);
   } catch (e) { console.error(e); setStatus(t('st_error'), 'error'); }
   finally { setRefineEnabled(true); setLoading(false); }
 }
@@ -624,7 +624,7 @@ async function runDeescalate() {
     currentVariant = 0;
     renderVariantSwitcher();
     setStatus(result.source === 'api' ? t('st_ready') : t('st_demo'), result.source === 'api' ? 'ok' : 'warn');
-    if (typeof result.remaining === 'number') setRemaining(result.remaining);
+    if (typeof result.remaining === 'number') setRemaining(result.remaining, result.unlimited);
     await showResult(resultVariants[0].email, resultVariants[0].subject, result.source === 'api');
     updateStyleBadge(result.source === 'api');
     setRefineEnabled(true);
@@ -672,7 +672,7 @@ async function runOptimize() {
     currentVariant = 0;
     renderVariantSwitcher();
     setStatus(result.source === 'api' ? t('st_ready') : t('st_demo'), result.source === 'api' ? 'ok' : 'warn');
-    if (typeof result.remaining === 'number') setRemaining(result.remaining);
+    if (typeof result.remaining === 'number') setRemaining(result.remaining, result.unlimited);
     // Erste Variante anzeigen (Signatur einsetzen + ggf. in die Standardsprache übersetzen).
     await showResult(resultVariants[0].email, resultVariants[0].subject, result.source === 'api');
     updateStyleBadge(result.source === 'api');
@@ -800,7 +800,7 @@ async function generateEmail(text, tone, length, formality, opts) {
   }
 
   const data = await res.json();
-  return { email: data.email, subject: data.subject, variants: data.variants, source: 'api', remaining: data.remaining };
+  return { email: data.email, subject: data.subject, variants: data.variants, source: 'api', remaining: data.remaining, unlimited: data.unlimited === true };
 }
 
 /* Einfache, lokale Aufbereitung als Platzhalter für die echte KI */
@@ -843,6 +843,7 @@ function simulateOptimization(text, tone) {
 const FREE_LIMIT = 5;
 let currentUser = null;
 let remainingToday = FREE_LIMIT;
+let unlimitedToday = false; // true bei aktivem Bezahl-Tarif (Server meldet unlimited)
 
 const account = document.getElementById('account');
 
@@ -873,7 +874,8 @@ function renderAccount() {
 const quotaHint = document.getElementById('quotaHint');
 function renderQuota() {
   if (!quotaHint) return;
-  if (currentUser) {
+  // Zahlende Kunden haben praktisch kein Limit → Zähler ausblenden.
+  if (currentUser && !unlimitedToday) {
     quotaHint.hidden = false;
     quotaHint.textContent = t('left_today').replace('{n}', remainingToday);
   } else {
@@ -882,8 +884,9 @@ function renderQuota() {
   }
 }
 
-function setRemaining(n) {
+function setRemaining(n, unlimited) {
   if (typeof n === 'number') remainingToday = Math.max(0, n);
+  if (typeof unlimited === 'boolean') unlimitedToday = unlimited;
   renderAccount();
   renderQuota();
 }
@@ -902,7 +905,7 @@ async function fetchRemaining() {
     const res = await fetch(API_ENDPOINT, { headers });
     if (res.ok) {
       const data = await res.json();
-      if (typeof data.remaining === 'number') setRemaining(data.remaining);
+      if (typeof data.remaining === 'number') setRemaining(data.remaining, data.unlimited === true);
     }
   } catch {}
 }

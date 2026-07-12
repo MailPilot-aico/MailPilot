@@ -16,6 +16,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { connectLambda, getStore } from "@netlify/blobs";
 import { verifyToken } from "@clerk/backend";
 import { loadProfile } from "./lib/profile.js";
+import { supabase } from "./lib/supabase.js";
 
 // Anthropic-Client erst bei Bedarf erzeugen. Würde er beim Laden des Moduls
 // erstellt und fehlte der ANTHROPIC_API_KEY, würde die GANZE Funktion abstürzen
@@ -48,7 +49,31 @@ async function getAccountId(event) {
 //   "claude-haiku-4-5"   – am günstigsten/schnellsten
 const MODEL = "claude-sonnet-4-6";
 
-const FREE_LIMIT = 5; // Gratis-Optimierungen pro Tag und Account
+// Tages-Limits je Tarif. Gratis wie auf der Preisseite versprochen (5/Tag);
+// bezahlte Tarife fühlen sich unbegrenzt an, die hohen Werte sind nur eine
+// Missbrauchs-Bremse zum Schutz der API-Kosten.
+const DAILY_LIMITS = { free: 5, starter: 200, business: 500, enterprise: 1000 };
+const FREE_LIMIT = DAILY_LIMITS.free; // Fallback/Kompatibilität
+
+// Tarif des Kontos laden (Supabase subscriptions, wie devices.js). Best effort:
+// schlägt der Abo-Check fehl (kein Supabase, DB weg), gilt sicherheitshalber Gratis –
+// die Generierung läuft dann trotzdem, nur eben mit dem kleinen Limit.
+async function dailyLimitFor(accountId) {
+  try {
+    if (!supabase) return { limit: DAILY_LIMITS.free, paid: false };
+    const { data } = await supabase
+      .from("subscriptions")
+      .select("plan, status")
+      .eq("account_id", accountId)
+      .maybeSingle();
+    if (data && data.status === "active" && data.plan && data.plan !== "free") {
+      return { limit: DAILY_LIMITS[data.plan] ?? DAILY_LIMITS.starter, paid: true };
+    }
+  } catch (err) {
+    console.error("Abo-Check fehlgeschlagen (Gratis angenommen):", err?.message || err);
+  }
+  return { limit: DAILY_LIMITS.free, paid: false };
+}
 
 const TONES = {
   professionell: "professionell und sachlich",
@@ -166,10 +191,12 @@ export const handler = async (event) => {
   const today = new Date().toISOString().slice(0, 10); // JJJJ-MM-TT
   const key = `${accountId}:${today}`;
   const used = await readUsed(key);
+  // Tarif-abhängiges Tageslimit: zahlende Kunden haben praktisch kein Limit.
+  const { limit, paid } = await dailyLimitFor(accountId);
 
   // GET: aktuellen Reststand melden, ohne zu zählen.
   if (event.httpMethod === "GET") {
-    return resp(200, { remaining: Math.max(0, FREE_LIMIT - used) });
+    return resp(200, { remaining: Math.max(0, limit - used), unlimited: paid });
   }
 
   if (event.httpMethod !== "POST") {
@@ -207,7 +234,7 @@ export const handler = async (event) => {
         system: translateSystem(LANGS[targetLang]),
         messages: [{ role: "user", content: text }],
       });
-      return resp(200, { email: extractText(message), remaining: Math.max(0, FREE_LIMIT - used) });
+      return resp(200, { email: extractText(message), remaining: Math.max(0, limit - used), unlimited: paid });
     } catch (err) {
       return apiError(err);
     }
@@ -223,7 +250,7 @@ export const handler = async (event) => {
         system: REFINE_SYSTEM_PROMPT,
         messages: [{ role: "user", content: `Anweisung: ${refine}\n\nE-Mail:\n${text}` }],
       });
-      return resp(200, { email: extractText(message), remaining: Math.max(0, FREE_LIMIT - used) });
+      return resp(200, { email: extractText(message), remaining: Math.max(0, limit - used), unlimited: paid });
     } catch (err) {
       return apiError(err);
     }
@@ -231,7 +258,7 @@ export const handler = async (event) => {
 
   // ---- Optimierungs-Modus: aus Notizen eine E-Mail erzeugen (zählt) ----
   // Tageslimit fälschungssicher prüfen.
-  if (used >= FREE_LIMIT) {
+  if (used >= limit) {
     return resp(429, { error: "Tageslimit erreicht.", limitReached: true, remaining: 0 });
   }
 
@@ -328,7 +355,7 @@ export const handler = async (event) => {
       : [full];
     const parsed = parts.map((p) => parseSubject(p, wantSubject));
 
-    const out = { email: parsed[0].email, remaining: Math.max(0, FREE_LIMIT - (used + 1)) };
+    const out = { email: parsed[0].email, remaining: Math.max(0, limit - (used + 1)), unlimited: paid };
     if (wantSubject) out.subject = parsed[0].subject;
     if (variants > 1 && parsed.length > 1) {
       out.variants = parsed.map((p) => ({ subject: p.subject, email: p.email }));

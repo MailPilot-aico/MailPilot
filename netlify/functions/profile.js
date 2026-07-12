@@ -14,8 +14,24 @@
    ========================================================= */
 
 import Anthropic from "@anthropic-ai/sdk";
+import { connectLambda, getStore } from "@netlify/blobs";
 import { verifyToken } from "@clerk/backend";
 import { loadProfile, upsertProfile, appendSample } from "./lib/profile.js";
+
+// Kosten-Bremse: so oft darf pro Konto und Tag der Stil per KI destilliert werden.
+// Darüber hinaus werden Beispiele weiter gesammelt, aber ohne KI-Aufruf (der
+// nächste Destillier-Lauf am Folgetag nimmt sie automatisch mit).
+const DISTILL_DAILY_LIMIT = 20;
+
+// Destillier-Zähler lesen/erhöhen (Netlify Blobs, best effort wie in optimize-email:
+// schlägt Blobs fehl, wird NICHT blockiert – dann greift nur die Bremse nicht).
+async function readDistillCount(key) {
+  try { return parseInt((await getStore("usage").get(key)) || "0", 10) || 0; }
+  catch { return 0; }
+}
+async function bumpDistillCount(key, n) {
+  try { await getStore("usage").set(key, String(n + 1)); } catch {}
+}
 
 // Günstiges, schnelles Modell fürs Stil-Zusammenfassen (nicht die teure Generierung).
 const DISTILL_MODEL = "claude-haiku-4-5";
@@ -118,6 +134,9 @@ export const handler = async (event) => {
   const accountId = await getAccountId(event);
   if (!accountId) return resp(401, { error: "Nicht angemeldet." });
 
+  // Blobs-Kontext für den Destillier-Zähler verbinden (v1-Function, wie optimize-email).
+  try { connectLambda(event); } catch {}
+
   // ---- Profil abrufen ----
   if (event.httpMethod === "GET") {
     const p = await loadProfile(accountId);
@@ -166,12 +185,19 @@ export const handler = async (event) => {
 
     const samples = appendSample(current?.samples, learnFrom);
     let style_summary = current?.style_summary || "";
-    try {
-      style_summary = await distillStyle(samples);
-    } catch (err) {
-      // Destillieren fehlgeschlagen (z. B. API-Limit): Beispiel trotzdem behalten,
-      // alten Stil beibehalten – kein harter Fehler für den Nutzer.
-      console.error("Stil-Destillieren fehlgeschlagen:", err?.message || err);
+    // Kosten-Bremse: KI-Destillieren maximal DISTILL_DAILY_LIMIT-mal pro Tag/Konto.
+    // Darüber wird das Beispiel trotzdem gespeichert (fließt später ein).
+    const distillKey = `distill:${accountId}:${new Date().toISOString().slice(0, 10)}`;
+    const distills = await readDistillCount(distillKey);
+    if (distills < DISTILL_DAILY_LIMIT) {
+      try {
+        style_summary = await distillStyle(samples);
+        await bumpDistillCount(distillKey, distills);
+      } catch (err) {
+        // Destillieren fehlgeschlagen (z. B. API-Limit): Beispiel trotzdem behalten,
+        // alten Stil beibehalten – kein harter Fehler für den Nutzer.
+        console.error("Stil-Destillieren fehlgeschlagen:", err?.message || err);
+      }
     }
 
     // Signatur automatisch lernen: hat der Nutzer noch KEINE Signatur hinterlegt,

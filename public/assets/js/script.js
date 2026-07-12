@@ -1774,6 +1774,14 @@ renderSettingsAccount();
     if (typeof mpApplyPrefs === 'function') mpApplyPrefs(data);
     // Gemerkte Lieblings-Zielsprache übernehmen (greift bei der nächsten Optimierung).
     if (data.preferred_lang && XLATE_NAMES[data.preferred_lang]) window.__mpPrefLang = data.preferred_lang;
+    // Onboarding: EINMALIG aufs lernende Gehirn hinweisen – nur bei Nutzern,
+    // die noch keinen gelernten Stil haben (alte Hasen kennen es schon).
+    try {
+      if (!localStorage.getItem('mp_brain_intro')) {
+        localStorage.setItem('mp_brain_intro', '1');
+        if (!data.has_style) toast(t('brain_intro'));
+      }
+    } catch {}
     // Offene Einstellungsfelder aktualisieren, falls das Panel schon gebaut ist.
     const nf = document.getElementById('setName');
     if (nf && !nf.value && data.sender_name) nf.value = data.sender_name;

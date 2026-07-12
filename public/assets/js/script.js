@@ -1784,7 +1784,21 @@ renderSettingsAccount();
     if (!loggedIn() || !text || !String(text).trim()) return;
     try {
       const res = await fetch(PROFILE_ENDPOINT, { method: 'POST', headers: await authHeaders(), body: JSON.stringify({ learnFrom: String(text) }) });
-      if (res.ok) { const d = await res.json().catch(() => null); if (d && d.has_style) window.__mpHasStyle = true; }
+      if (res.ok) {
+        const d = await res.json().catch(() => null);
+        if (d && d.has_style) window.__mpHasStyle = true;
+        // Signatur automatisch gelernt → lokal übernehmen (nur wenn dort noch leer) + Hinweis.
+        if (d && d.signature_learned && d.signature) {
+          try {
+            if (!(localStorage.getItem(SIG_KEY) || '').trim()) {
+              localStorage.setItem(SIG_KEY, d.signature);
+              const sf = document.getElementById('setSignature');
+              if (sf && !sf.value) sf.value = d.signature;
+              toast(t('sig_learned'));
+            }
+          } catch {}
+        }
+      }
     } catch {}
   };
 

@@ -92,6 +92,21 @@ Gib KEINE Inhalte, Namen, Firmen oder Fakten wieder. Antworte ausschließlich mi
   return message.content.filter((b) => b.type === "text").map((b) => b.text).join("").trim();
 }
 
+// Signatur-Vorschlag aus einer echten Mail ziehen (heuristisch, ohne KI-Kosten):
+// findet in den letzten Zeilen eine übliche Grußformel und nimmt den Block ab dort
+// (Grußformel + Name/Firma, max. 5 Zeilen / 200 Zeichen). Nichts gefunden → "".
+function extractSignature(text) {
+  const lines = String(text || "").trim().split(/\r?\n/).map((l) => l.trim());
+  const rx = /^(mit (freundlichen|besten|herzlichen) grüßen|beste grüße|viele grüße|liebe grüße|herzliche grüße|freundliche grüße|schöne grüße|gruß|grüße|lg|mfg|vg|kind regards|best regards|warm regards|regards|best|cheers)[,!.]?$/i;
+  for (let i = Math.max(0, lines.length - 6); i < lines.length; i++) {
+    if (rx.test(lines[i]) && lines.length - i <= 5) {
+      const sig = lines.slice(i).filter(Boolean).join("\n").slice(0, 200).trim();
+      if (sig) return sig;
+    }
+  }
+  return "";
+}
+
 export const handler = async (event) => {
   if (event.httpMethod === "OPTIONS") return resp(204, null);
 
@@ -153,9 +168,17 @@ export const handler = async (event) => {
       console.error("Stil-Destillieren fehlgeschlagen:", err?.message || err);
     }
 
+    // Signatur automatisch lernen: hat der Nutzer noch KEINE Signatur hinterlegt,
+    // die Grußformel + Name aus der gelernten Mail als Signatur übernehmen.
+    const fields = { samples, style_summary };
+    if (!String(current?.signature || "").trim()) {
+      const sig = extractSignature(learnFrom);
+      if (sig) fields.signature = sig;
+    }
+
     try {
-      const saved = await upsertProfile(accountId, { samples, style_summary });
-      return resp(200, { ...publicView(saved), learned: true });
+      const saved = await upsertProfile(accountId, fields);
+      return resp(200, { ...publicView(saved), learned: true, signature_learned: Boolean(fields.signature) });
     } catch (err) {
       return resp(500, { error: err?.message || "Lernen fehlgeschlagen." });
     }

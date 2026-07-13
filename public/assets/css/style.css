@@ -798,6 +798,8 @@ body.is-authed .tool-lock { display: none; }
   background: var(--surface); border: 1px solid var(--border);
   border-radius: 11px; padding: 6px;
   box-shadow: 0 18px 44px -18px rgba(0, 0, 0, .8);
+  /* 33 Sprachen: scrollbar, damit das Menü nicht über den Bildschirm läuft */
+  max-height: min(66vh, 460px); overflow-y: auto;
 }
 .lang__menu[hidden] { display: none; }
 .lang__opt {

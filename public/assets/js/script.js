@@ -5,7 +5,7 @@
    ========================================================= */
 
 /* ---- Unterstützte Sprachen (leicht erweiterbar) ---- */
-const SUPPORTED = ['en', 'de', 'es', 'fr', 'it', 'pt-BR'];
+const SUPPORTED = ['en', 'de', 'es', 'fr', 'it', 'pt-BR', 'nl', 'pl', 'sv', 'da', 'nb', 'fi', 'cs', 'sk', 'hu', 'ro', 'el', 'tr', 'ru', 'uk', 'bg', 'hr', 'sr', 'zh', 'zh-TW', 'ja', 'ko', 'hi', 'id', 'th', 'vi', 'ar', 'he'];
 
 /* ---- Sprache bestimmen: gespeicherte Wahl > Browsersprache > Englisch ---- */
 function detectLang() {
@@ -96,6 +96,8 @@ function applyLang(next) {
   const langChanged = next && next !== lang;
   if (next) { lang = next; try { localStorage.setItem('ec_lang', lang); } catch {} }
   document.documentElement.lang = lang;
+  // Rechts-nach-links für Arabisch/Hebräisch (Textrichtung der ganzen Seite).
+  document.documentElement.dir = (lang === 'ar' || lang === 'he') ? 'rtl' : 'ltr';
   document.title = t('doc_title');
   document.querySelectorAll('[data-i18n]').forEach((el) => { el.textContent = t(el.dataset.i18n); });
   document.querySelectorAll('[data-i18n-ph]').forEach((el) => { el.placeholder = t(el.dataset.i18nPh); });

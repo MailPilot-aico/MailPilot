@@ -101,6 +101,8 @@ function applyLang(next) {
   document.title = t('doc_title');
   document.querySelectorAll('[data-i18n]').forEach((el) => { el.textContent = t(el.dataset.i18n); });
   document.querySelectorAll('[data-i18n-ph]').forEach((el) => { el.placeholder = t(el.dataset.i18nPh); });
+  // Dynamisch gerenderte Vorlagen-Chips (nicht via data-i18n) bei Sprachwechsel neu aufbauen.
+  if (typeof renderTemplateChips === 'function') renderTemplateChips();
   // Ausgabe-Feld mit Beispiel füllen, solange noch kein echtes Ergebnis vorliegt
   if (!hasRealResult) {
     if (!outputLangManual) outputLang = lang;   // Vorschau folgt der UI-Sprache,
@@ -397,7 +399,7 @@ function getIndustry() { try { return localStorage.getItem(INDUSTRY_KEY) || 'all
 function industryLabel() {
   const ind = INDUSTRIES.find((x) => x.id === getIndustry());
   if (!ind || ind.id === 'allgemein') return '';
-  return lang === 'en' ? ind.en : ind.de;
+  return lang === 'de' ? ind.de : ind.en;   // Deutsch → DE, alle anderen → EN-Fallback
 }
 
 // Branchenspezifische Vorlagen (deutsch); für „Allgemein"/EN die normalen TEMPLATES.
@@ -1442,7 +1444,7 @@ if (nameField) {
 }
 const industrySel = document.getElementById('setIndustry');
 if (industrySel) {
-  industrySel.innerHTML = INDUSTRIES.map((x) => '<option value="' + x.id + '">' + escapeHtml(lang === 'en' ? x.en : x.de) + '</option>').join('');
+  industrySel.innerHTML = INDUSTRIES.map((x) => '<option value="' + x.id + '">' + escapeHtml(lang === 'de' ? x.de : x.en) + '</option>').join('');
   industrySel.value = getIndustry();
   industrySel.addEventListener('change', () => {
     try { localStorage.setItem(INDUSTRY_KEY, industrySel.value); } catch {}

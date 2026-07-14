@@ -21,7 +21,6 @@
   --accent-2:    #a855f7;   /* auffälliges, modernes Lila (Primär-CTA) */
   --accent-3:    #c084fc;   /* heller Glanz */
   --accent-soft: rgba(139, 92, 246, .16);
-  --gold:        #fbbf24;
   --success:     #34d399;
   --danger:      #f87171;
   --warn:        #fbbf24;
@@ -970,32 +969,7 @@ html { scroll-behavior: smooth; }
   border-radius: 16px;
   box-shadow: var(--shadow);
 }
-.proof__avatars { display: flex; align-items: center; }
-.proof__avatar {
-  width: 38px; height: 38px; border-radius: 50%;
-  border: 2px solid var(--surface);
-  margin-left: -12px;
-  object-fit: cover;
-  background: var(--surface-3);
-  box-shadow: 0 2px 8px -2px rgba(0, 0, 0, .55);
-  display: grid; place-items: center;
-  font-size: 11px; font-weight: 700; color: #fff;
-  transition: transform .18s ease;
-}
-.proof:hover .proof__avatar { transform: translateY(-1px); }
-.proof__avatar:first-child { margin-left: 0; }
-/* Fallback, falls ein Foto nicht lädt: farbiger Verlauf statt leerem Kreis */
-.proof__avatar--ph { background: linear-gradient(135deg, var(--accent), var(--accent-2)); }
-.proof__avatar:nth-child(2).proof__avatar--ph { background: linear-gradient(135deg, #f472b6, #a855f7); }
-.proof__avatar:nth-child(3).proof__avatar--ph { background: linear-gradient(135deg, #38bdf8, #6366f1); }
-.proof__avatar:nth-child(4).proof__avatar--ph { background: linear-gradient(135deg, #34d399, #0ea5e9); }
-.proof__avatar--more {
-  background: var(--surface-3);
-  border-color: var(--surface);
-  color: var(--accent-3); font-size: 11.5px; font-weight: 700; letter-spacing: -.02em;
-}
 .proof__body { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; text-align: left; }
-.proof__stars { display: inline-flex; gap: 2px; color: var(--gold); font-size: 15px; line-height: 1; filter: drop-shadow(0 1px 4px rgba(251, 191, 36, .4)); }
 .proof__text { font-size: 14px; line-height: 1.45; }
 .proof__quote { font-weight: 600; color: var(--text); }
 .proof__quote::after { content: " "; }

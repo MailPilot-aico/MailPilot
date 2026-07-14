@@ -2,6 +2,11 @@ import { withSentryConfig } from "@sentry/nextjs";
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Arbeitsverzeichnis explizit festlegen: sonst rät Next bei mehreren
+  // lockfiles auf dem System (z. B. ein verirrtes ~/package-lock.json) das
+  // Workspace-Root falsch und warnt beim Build.
+  turbopack: { root: import.meta.dirname },
+
   // Sicherheits-Header auch für Next-gerenderte SEITEN (netlify.toml-Header
   // greifen mit dem Netlify-Next-Plugin nur für statische Dateien).
   // Bewusst KEIN X-Frame-Options: das Outlook-Add-in muss einbettbar bleiben.

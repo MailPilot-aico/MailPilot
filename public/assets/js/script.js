@@ -1732,16 +1732,20 @@ applyLang();
 renderSettingsAccount();
 
 /* Next.js-Hydration setzt den <title> NACH unserem applyLang wieder auf den
-   statischen (englischen) SSR-Titel zurück → beobachten und in der UI-Sprache
-   halten. Kein Endlos-Loop: Setzen auf den gleichen Wert feuert zwar den
-   Observer, aber der Vergleich greift dann sofort. */
+   statischen (englischen) SSR-Titel zurück — und tauscht dabei das ganze
+   <title>-ELEMENT aus (ein Observer nur auf dem Knoten wäre danach verwaist).
+   Darum den <head> mit subtree beobachten und den Titel in der UI-Sprache
+   halten. Kein Endlos-Loop: Setzen auf den gleichen Wert läuft in den
+   Gleichheits-Vergleich und endet sofort. */
 (() => {
-  const titleEl = document.querySelector('title');
-  if (!titleEl || typeof MutationObserver === 'undefined') return;
-  new MutationObserver(() => {
+  if (typeof MutationObserver === 'undefined') return;
+  const keepTitle = () => {
     const want = t('doc_title');
     if (want && want !== 'doc_title' && document.title !== want) document.title = want;
-  }).observe(titleEl, { childList: true });
+  };
+  new MutationObserver(keepTitle)
+    .observe(document.head, { childList: true, subtree: true, characterData: true });
+  keepTitle();
 })();
 
 /* ---- Rückkehr von Stripe Checkout: Rückmeldung + Status auffrischen ---- */

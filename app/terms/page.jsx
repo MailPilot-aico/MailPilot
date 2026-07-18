@@ -59,7 +59,8 @@ const DE = {
     ['9. Änderungen & anwendbares Recht',
       'Wir dürfen diese Bedingungen aktualisieren; die neue Fassung veröffentlichen wir hier und kündigen wesentliche Änderungen angemessen an. Es gilt deutsches Recht unter Ausschluss des Kollisionsrechts und – soweit anwendbar – des UN-Kaufrechts. Zwingende Verbraucherschutzrechte deines Wohnsitzlandes bleiben unberührt. Kontakt: info@mailpilot-ai.com.'],
   ],
-  note: 'Mustertext — bitte vor dem Livegang von einer fachkundigen Person prüfen lassen. Stand: Juni 2026.',
+  // Hinweis an Henrik (nicht öffentlich): Text bei Gelegenheit fachkundig prüfen lassen.
+  note: 'Stand: Juni 2026.',
 }
 
 const S = {

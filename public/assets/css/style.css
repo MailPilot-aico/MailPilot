@@ -123,6 +123,9 @@ body {
   gap: 20px;
   min-height: 520px;
 }
+/* Grid-Spalten dürfen unter die Min-Content-Breite ihrer Kinder schrumpfen —
+   sonst horizontales Scrollen auf schmalen Handys (≤ 330px). */
+.workspace > .panel { min-width: 0; }
 
 /* ---- Panel (Karte) ---- */
 .panel {
@@ -868,12 +871,16 @@ body.is-authed .tool-lock { display: none; }
   .brand__logo { width: 40px; height: 40px; border-radius: 12px; }
   .brand__logo-mark { width: 23px; height: 23px; }
   .brand__name { font-size: 16px; }
-  .header-right { gap: 7px; }
+  .app-header { gap: 10px; }
+  .header-right { gap: 5px; }
   .lang__btn { padding: 7px 8px; gap: 4px; }
   #langCurrent, .lang__chevron { display: none; }   /* auf dem Handy nur der Globus */
   .lang__globe { width: 17px; height: 17px; }
-  .btn-account { padding: 9px 13px; font-size: 13px; gap: 6px; border-radius: 10px; }
+  .btn-account { padding: 8px 10px; font-size: 12px; gap: 5px; border-radius: 10px; }
   .btn-account__icon svg { width: 15px; height: 15px; }
+  /* Zahnrad kompakter, sonst ragt die Kopfzeile über den Rand (horizontales Wackeln) */
+  .set-gear { width: 34px; height: 34px; border-radius: 10px; }
+  .set-gear svg { width: 18px; height: 18px; }
 }
 /* Sehr schmale Geräte: Markenname weicht, Logo bleibt */
 @media (max-width: 360px) {

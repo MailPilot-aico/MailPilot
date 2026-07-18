@@ -101,6 +101,12 @@ function applyLang(next) {
   document.title = t('doc_title');
   document.querySelectorAll('[data-i18n]').forEach((el) => { el.textContent = t(el.dataset.i18n); });
   document.querySelectorAll('[data-i18n-ph]').forEach((el) => { el.placeholder = t(el.dataset.i18nPh); });
+  // Attribute, die beim Seitenaufbau VOR dem Sprachpaket-Merge entstanden sind,
+  // tragen sonst rohe Keys (Screenreader läsen „tpl_label") → hier auffrischen.
+  const tplRowEl = document.getElementById('tplRow');
+  if (tplRowEl) tplRowEl.setAttribute('aria-label', t('tpl_label'));
+  const deescEl = document.getElementById('deescalateBtn');
+  if (deescEl) deescEl.title = t('deescalate_btn');
   // Dynamisch gerenderte Vorlagen-Chips (nicht via data-i18n) bei Sprachwechsel neu aufbauen.
   if (typeof renderTemplateChips === 'function') renderTemplateChips();
   // Ausgabe-Feld mit Beispiel füllen, solange noch kein echtes Ergebnis vorliegt
@@ -1342,7 +1348,7 @@ function applyTheme(theme) {
   } catch (e) {}
   const bar = htmlToEl(
     '<div id="mpOutlookBar" style="background:linear-gradient(90deg,#170d2b,#241640);border-bottom:1px solid #2c2148;padding:9px 42px 9px 16px;display:flex;align-items:center;justify-content:center;position:relative;font-family:Inter,Segoe UI,system-ui,sans-serif;">'
-    + '<a href="/outlook" style="color:#cdbdf5;font-size:14px;font-weight:600;text-decoration:none;">✈ New: MailPilot works right inside Outlook — see how →</a>'
+    + '<a href="/outlook" data-i18n="outlook_banner" style="color:#cdbdf5;font-size:14px;font-weight:600;text-decoration:none;">' + escapeHtml(t('outlook_banner')) + '</a>'
     + '<button type="button" aria-label="Close" style="position:absolute;right:12px;top:50%;transform:translateY(-50%);background:none;border:none;color:#8b7fb0;font-size:18px;line-height:1;cursor:pointer;padding:2px 6px;">&times;</button>'
     + '</div>'
   );
@@ -1724,6 +1730,19 @@ applyTheme(getTheme());
 /* ---- Start ---- */
 applyLang();
 renderSettingsAccount();
+
+/* Next.js-Hydration setzt den <title> NACH unserem applyLang wieder auf den
+   statischen (englischen) SSR-Titel zurück → beobachten und in der UI-Sprache
+   halten. Kein Endlos-Loop: Setzen auf den gleichen Wert feuert zwar den
+   Observer, aber der Vergleich greift dann sofort. */
+(() => {
+  const titleEl = document.querySelector('title');
+  if (!titleEl || typeof MutationObserver === 'undefined') return;
+  new MutationObserver(() => {
+    const want = t('doc_title');
+    if (want && want !== 'doc_title' && document.title !== want) document.title = want;
+  }).observe(titleEl, { childList: true });
+})();
 
 /* ---- Rückkehr von Stripe Checkout: Rückmeldung + Status auffrischen ---- */
 (() => {

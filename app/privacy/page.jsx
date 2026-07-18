@@ -40,7 +40,8 @@ const DE = {
     ['4. Deine Rechte',
       'Nach der DSGVO hast du das Recht auf Auskunft (Art. 15), Berichtigung (Art. 16), Löschung (Art. 17), Einschränkung der Verarbeitung (Art. 18), Datenübertragbarkeit (Art. 20) und Widerspruch (Art. 21). Zur Ausübung dieser Rechte genügt eine formlose Nachricht an info@mailpilot-ai.com. Außerdem hast du das Recht, dich bei einer Datenschutz-Aufsichtsbehörde zu beschweren – für uns ist das Unabhängige Landeszentrum für Datenschutz Schleswig-Holstein (ULD) in Kiel zuständig.'],
   ],
-  note: 'Mustertext — bitte vor dem Livegang von einer fachkundigen Person prüfen lassen. Stand: Juni 2026.',
+  // Hinweis an Henrik (nicht öffentlich): Text bei Gelegenheit fachkundig prüfen lassen.
+  note: 'Stand: Juni 2026.',
 }
 
 const S = {

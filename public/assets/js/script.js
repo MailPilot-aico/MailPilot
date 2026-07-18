@@ -1274,20 +1274,18 @@ if (enterpriseForm) {
   enterpriseForm.addEventListener('submit', async (e) => {
     e.preventDefault();
     const submit  = enterpriseForm.querySelector('.ent-form__submit');
-    // Netlify Forms braucht das form-name-Feld und den POST auf die statische
-    // Datei public/__forms.html (dort ist das Formular für den Build-Scanner
-    // deklariert). Ein POST auf '/' liefert zwar 200, landet aber NIRGENDS —
-    // die Anfrage wäre still verloren.
+    // Anfrage an die eigene Function: speichert dauerhaft in Netlify Blobs
+    // (Store „inquiries") + Function-Log. Der frühere POST auf '/' lieferte
+    // zwar 200, landete aber NIRGENDS — die Anfrage war still verloren.
     const fd = new FormData(enterpriseForm);
-    fd.set('form-name', 'enterprise');
-    const payload = new URLSearchParams(fd).toString();
+    const payload = JSON.stringify({ email: fd.get('email') || '', message: fd.get('message') || '', lang });
     submit.disabled = true;
     submit.textContent = t('enterprise_sending');
     if (entStatus) { entStatus.textContent = ''; entStatus.dataset.type = ''; }
     try {
-      const res = await fetchWithTimeout('/__forms.html', {
+      const res = await fetchWithTimeout(API_BASE + '/.netlify/functions/enterprise-inquiry', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        headers: { 'Content-Type': 'application/json' },
         body: payload,
       }, 15000);
       if (!res.ok) throw new Error('HTTP ' + res.status);

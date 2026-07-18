@@ -32,13 +32,18 @@ async function getAccountId(event) {
    Die Price-IDs sind NICHT geheim und dürfen hier fest stehen.
    ===================================================================== */
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY;   // <-- so lassen (Wert via .env / Netlify)
-const PRICE_STARTER  = "price_1TiE60E6h53BnMG9dkcZdYNj";   //  9 € STARTER  (in Stripe verifiziert)
-const PRICE_BUSINESS = "price_1TiE7yE6h53BnMG93zxRUIFr";   // 29 € BUSINESS (in Stripe verifiziert)
+
+// Test- UND Live-Price-IDs (beide am 18.07.2026 im Stripe-Dashboard verifiziert).
+// Der Modus des Keys entscheidet automatisch: sk_live → Live-Preise, sonst Test.
+// So bricht der Checkout in keinem Zwischenzustand — die Umstellung auf Live
+// besteht nur noch aus dem Key-Tausch in Netlify.
+const IS_LIVE = (STRIPE_SECRET_KEY || "").startsWith("sk_live");
+const PRICES = IS_LIVE
+  ? { starter: "price_1TiEI0E6h53BnMG97uP3R3sa", business: "price_1TiE8HE6h53BnMG9NFRVM3QA" }  // LIVE  (9 € / 29 €)
+  : { starter: "price_1TiE60E6h53BnMG9dkcZdYNj", business: "price_1TiE7yE6h53BnMG93zxRUIFr" }; // TEST  (9 € / 29 €)
 /* ===================================================================== */
 
 const stripe = new Stripe(STRIPE_SECRET_KEY || "");
-
-const PRICES = { starter: PRICE_STARTER, business: PRICE_BUSINESS };
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",

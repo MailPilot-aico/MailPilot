@@ -21,9 +21,12 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "");
 const WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET || "";
 
 // Stripe-Price-ID → interner Plan (gleiche IDs wie create-checkout-session.js).
+// Test- UND Live-IDs gemappt — der Webhook verarbeitet damit beide Modi korrekt.
 const PRICE_TO_PLAN = {
-  price_1TiE60E6h53BnMG9dkcZdYNj: "starter",
-  price_1TiE7yE6h53BnMG93zxRUIFr: "business",
+  price_1TiE60E6h53BnMG9dkcZdYNj: "starter",   // Test  9 €
+  price_1TiE7yE6h53BnMG93zxRUIFr: "business",  // Test 29 €
+  price_1TiEI0E6h53BnMG97uP3R3sa: "starter",   // LIVE  9 €
+  price_1TiE8HE6h53BnMG9NFRVM3QA: "business",  // LIVE 29 €
 };
 const SEAT = { free: 1, starter: 1, business: 5 };
 

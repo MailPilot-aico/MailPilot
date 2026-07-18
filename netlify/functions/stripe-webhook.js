@@ -32,24 +32,30 @@ function planFromSubscription(sub) {
   return PRICE_TO_PLAN[priceId] || "starter";
 }
 
+// WICHTIG: Bei einem Schreib-Fehler WERFEN (nicht nur loggen). Der Handler gibt
+// dann 500 zurück, worauf Stripe den Webhook automatisch erneut zustellt. Ein
+// stilles „200 trotz Fehler" würde eine ZAHLENDE Kundin dauerhaft als „free"
+// stranden lassen (Laienfest-Prinzip „nie still verlieren").
 async function upsertByAccount(accountId, fields) {
   if (!accountId) return;
+  if (!supabase) throw new Error("Supabase-Client nicht initialisiert (SUPABASE_URL/KEY fehlt).");
   const { error } = await supabase
     .from("subscriptions")
     .upsert(
       { account_id: accountId, updated_at: new Date().toISOString(), ...fields },
       { onConflict: "account_id" }
     );
-  if (error) console.error("Supabase-Upsert-Fehler:", error.message);
+  if (error) throw new Error("Supabase-Upsert-Fehler: " + error.message);
 }
 
 async function updateByCustomer(customerId, fields) {
   if (!customerId) return;
+  if (!supabase) throw new Error("Supabase-Client nicht initialisiert (SUPABASE_URL/KEY fehlt).");
   const { error } = await supabase
     .from("subscriptions")
     .update({ updated_at: new Date().toISOString(), ...fields })
     .eq("stripe_customer_id", customerId);
-  if (error) console.error("Supabase-Update-Fehler:", error.message);
+  if (error) throw new Error("Supabase-Update-Fehler: " + error.message);
 }
 
 export const handler = async (event) => {

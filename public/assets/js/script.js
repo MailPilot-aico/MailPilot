@@ -1725,7 +1725,7 @@ applyTheme(getTheme());
 applyLang();
 renderSettingsAccount();
 
-/* ---- Rückkehr von Stripe Checkout: kurze Rückmeldung anzeigen ---- */
+/* ---- Rückkehr von Stripe Checkout: Rückmeldung + Status auffrischen ---- */
 (() => {
   const params = new URLSearchParams(window.location.search);
   const status = params.get('checkout');
@@ -1733,8 +1733,24 @@ renderSettingsAccount();
   params.delete('checkout');                  // URL säubern (keine Wiederholung bei Reload)
   const query = params.toString();
   window.history.replaceState({}, '', window.location.pathname + (query ? '?' + query : ''));
-  if (status === 'success') alert(t('checkout_success'));
-  else if (status === 'cancel') alert(t('checkout_canceled'));
+
+  if (status === 'cancel') { alert(t('checkout_canceled')); return; }
+  if (status !== 'success') return;
+
+  alert(t('checkout_success'));
+
+  // Der Stripe-Webhook aktiviert das Abo ASYNCHRON (ein paar Sekunden). Daher
+  // kurz nachpollen, bis der neue Tarif serverseitig steht, und dann Tages-Limit
+  // UND Abo-Anzeige auffrischen. So verschwindet das „Limit erreicht" von selbst
+  // direkt nach dem Kauf – die Nutzerin muss nichts neu laden.
+  let tries = 0;
+  const poll = async () => {
+    tries += 1;
+    await fetchRemaining();               // Tageslimit neu holen (unlimited bei Bezahltarif)
+    try { await renderSubscription(); } catch {}
+    if ((!currentUser || !unlimitedToday) && tries < 6) setTimeout(poll, 2000); // bis ~12 s nachfassen
+  };
+  setTimeout(poll, 1500);                  // kurz warten, bis die Clerk-Session nach dem Reload steht
 })();
 
 /* =========================================================

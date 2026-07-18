@@ -52,17 +52,27 @@ export const handler = async (event) => {
   const accountId = await getAccountId(event);
   if (!accountId) return resp(401, { error: "Nicht angemeldet." });
 
-  // Plan aus Supabase. Fehlt Tabelle/Eintrag → kostenloser Plan.
+  // Plan aus Supabase.
+  // WICHTIG (Laienfest-Prinzip „nie still verlieren"): Ein DB-/Konfig-Fehler darf
+  // NICHT stillschweigend als „free" durchgehen – sonst sitzt eine ZAHLENDE Kundin
+  // unbemerkt im Gratis-Limit fest und der Fehler ist nirgends sichtbar.
+  // Nur ein ECHTES Fehlen des Eintrags (data=null UND error=null) heißt „free".
+  if (!supabase) {
+    console.error("Supabase-Status-Fehler: Client nicht initialisiert (SUPABASE_URL/KEY fehlt?).");
+    return resp(503, { error: "Abo-Status momentan nicht abrufbar. Bitte kurz später erneut versuchen." });
+  }
   let row = null;
   try {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("subscriptions")
       .select("plan, seat_limit, status, stripe_customer_id")
       .eq("account_id", accountId)
       .maybeSingle();
+    if (error) throw new Error(error.message);   // supabase-js WIRFT bei Query-Fehlern NICHT → selbst prüfen
     row = data || null;
   } catch (e) {
     console.error("Supabase-Status-Fehler:", e.message);
+    return resp(503, { error: "Abo-Status momentan nicht abrufbar. Bitte kurz später erneut versuchen." });
   }
 
   const plan = row?.plan || "free";

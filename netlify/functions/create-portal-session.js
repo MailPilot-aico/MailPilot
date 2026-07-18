@@ -53,20 +53,30 @@ export const handler = async (event) => {
   if (!accountId) return resp(401, { error: "Nicht angemeldet." });
 
   // Stripe-Kunden-ID zum Konto laden.
+  // WICHTIG (Laienfest-Prinzip „nie still verlieren"): Ein DB-/Konfig-Fehler darf
+  // NICHT als „kein Abo" (404) getarnt werden – sonst schicken wir eine ZAHLENDE
+  // Kundin fälschlich zurück in den Kauf-Flow und sie kann weder kündigen noch
+  // ihre Zahlungsart ändern. „Kein Kunde" gilt nur bei data=null OHNE Fehler.
+  if (!supabase) {
+    console.error("Supabase-Portal-Fehler: Client nicht initialisiert (SUPABASE_URL/KEY fehlt?).");
+    return resp(503, { error: "Abo-Verwaltung momentan nicht erreichbar. Bitte kurz später erneut versuchen." });
+  }
   let customerId = null;
   try {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("subscriptions")
       .select("stripe_customer_id")
       .eq("account_id", accountId)
       .maybeSingle();
+    if (error) throw new Error(error.message);   // supabase-js WIRFT bei Query-Fehlern NICHT → selbst prüfen
     customerId = data?.stripe_customer_id || null;
   } catch (e) {
     console.error("Supabase-Portal-Fehler:", e.message);
+    return resp(503, { error: "Abo-Verwaltung momentan nicht erreichbar. Bitte kurz später erneut versuchen." });
   }
 
   if (!customerId) {
-    // Noch kein zahlender Kunde → es gibt nichts zu verwalten.
+    // Wirklich kein zahlender Kunde (data=null, kein Fehler) → es gibt nichts zu verwalten.
     return resp(404, {
       error: "Kein aktives Abo gefunden. Bitte zuerst einen Tarif wählen.",
       noCustomer: true,

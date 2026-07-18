@@ -23,7 +23,7 @@ const EN = {
     ['4. Your rights',
       'Under the GDPR you have the right to access your data (Art. 15), to rectification (Art. 16), to erasure (Art. 17), to restriction of processing (Art. 18), to data portability (Art. 20) and to object (Art. 21). To exercise these rights, contact us at info@mailpilot-ai.com. You also have the right to lodge a complaint with a data protection supervisory authority — for us this is the Independent Centre for Data Protection Schleswig-Holstein (ULD), Kiel, Germany.'],
   ],
-  note: 'Template text — please have it reviewed by a legal professional before going live. Last updated: June 2026.',
+  note: 'Last updated: June 2026.',
 }
 
 const DE = {

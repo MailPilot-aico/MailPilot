@@ -68,6 +68,7 @@ let hasRealResult = false;   // true, sobald ein echtes KI-Ergebnis im Ausgabefe
 
 /* ---- Übersetzung der Ausgabe ---- */
 let baseResultText  = '';     // Original des echten KI-Ergebnisses (Quelle fürs Übersetzen)
+let generatedLang   = 'de';   // Sprache, in der das Original ERZEUGT wurde (Server generiert direkt in der UI-Sprache; Demo-Modus = Deutsch)
 let outputLang      = lang;   // Sprache, in der der Ausgabetext gerade angezeigt wird
 let outputLangManual = false; // true, sobald der Nutzer selbst eine Zielsprache gewählt hat
 
@@ -300,7 +301,7 @@ async function showResult(rawEmail, subject, doTranslate) {
   output.classList.remove('is-example');
   hasRealResult = true;
   baseResultText = email;
-  outputLang = 'de';
+  outputLang = generatedLang;   // Server hat direkt in dieser Sprache generiert
   outputLangManual = false;
   updateTranslateUI();
   copyBtn.disabled = false;
@@ -526,7 +527,9 @@ let renderTemplateChips = function () {};
   if (sc) sc.addEventListener('click', async () => {
     const f = document.getElementById('subjectField');
     if (!f || !f.value) return;
-    try { await navigator.clipboard.writeText(f.value); } catch {}
+    // Ehrlich bleiben: Häkchen nur bei wirklich erfolgtem Kopieren.
+    try { await navigator.clipboard.writeText(f.value); }
+    catch { toast(t('copy_error'), 'warn'); return; }
     sc.classList.add('is-copied'); setTimeout(() => sc.classList.remove('is-copied'), 1500);
   });
 })();
@@ -717,16 +720,22 @@ copyBtn.addEventListener('click', async () => {
   // Beim Kopieren den (abschaltbaren) MailPilot-Hinweis anhängen → virale Verbreitung.
   let txt = output.value;
   if (promoEnabled()) txt = txt.replace(/\s+$/, '') + '\n\n' + getPromoLine();
+  // Ehrlich bleiben: „Kopiert!" nur zeigen, wenn wirklich kopiert wurde
+  // (Clipboard kann blockiert sein: Berechtigung, eingebettete WebView).
+  let ok = true;
   try {
     await navigator.clipboard.writeText(txt);
   } catch {
-    const prev = output.value;
-    output.value = txt;
-    output.select();
-    document.execCommand('copy');
-    output.value = prev;
-    window.getSelection()?.removeAllRanges();
+    try {
+      const prev = output.value;
+      output.value = txt;
+      output.select();
+      ok = document.execCommand('copy') === true;
+      output.value = prev;
+      window.getSelection()?.removeAllRanges();
+    } catch { ok = false; }
   }
+  if (!ok) { toast(t('copy_error'), 'warn'); return; }
   const label = copyBtn.querySelector('.btn__label');
   copyBtn.classList.add('is-copied');
   label.textContent = t('copied');
@@ -756,6 +765,20 @@ function apiRoot() {
 const API_BASE     = apiRoot();
 const API_ENDPOINT = API_BASE + '/.netlify/functions/optimize-email';
 
+/* Fetch mit hartem Timeout: Bei hängender Verbindung (Mobilfunk-Handoff, Proxy)
+   darf die App nie minutenlang mit gesperrtem Button festhängen („nie hängen").
+   Ein Abbruch wirft AbortError und landet in den vorhandenen catch-Pfaden.
+   clearTimeout im finally, damit nach Erfolg/Redirect kein Abort mehr feuert. */
+async function fetchWithTimeout(url, opts, timeoutMs) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs || 20000);
+  try {
+    return await fetch(url, { ...(opts || {}), signal: ctrl.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function generateEmail(text, tone, length, formality, opts) {
   // Identity-Token mitschicken – das Backend identifiziert den Nutzer darüber
   // und zählt das Tageslimit fälschungssicher serverseitig.
@@ -770,6 +793,12 @@ async function generateEmail(text, tone, length, formality, opts) {
   const payload = { text, tone };
   if (typeof length === 'number')    payload.length = length;
   if (typeof formality === 'number') payload.formality = formality;
+
+  // Zielsprache mitschicken: Der Server generiert die E-Mail DIREKT in der
+  // gewünschten Sprache (gemerkte Lieblingssprache vor UI-Sprache) — erspart
+  // den zweiten Übersetzungs-Aufruf samt „deutscher Mail, die kurz aufblitzt".
+  const pref = window.__mpPrefLang;
+  payload.lang = (pref && XLATE_NAMES[pref]) ? pref : (SUPPORTED.includes(lang) ? lang : 'de');
   if (opts) {
     if (opts.replyTo)                       payload.replyTo  = opts.replyTo;   // Antwort-Modus
     if (opts.refine)                        payload.refine   = opts.refine;    // Schnell-Buttons
@@ -786,14 +815,17 @@ async function generateEmail(text, tone, length, formality, opts) {
   const senderName = getName();
   if (senderName) payload.senderName = senderName;
 
+  // Demo-Fallback erzeugt immer Deutsch → Generierungssprache entsprechend merken.
+  const demo = () => { generatedLang = 'de'; return { email: simulateOptimization(text, tone), source: 'demo' }; };
+
   let res;
   try {
-    res = await fetch(API_ENDPOINT, { method: 'POST', headers, body: JSON.stringify(payload) });
+    res = await fetchWithTimeout(API_ENDPOINT, { method: 'POST', headers, body: JSON.stringify(payload) }, 60000);
   } catch {
-    return { email: simulateOptimization(text, tone), source: 'demo' };
+    return demo();
   }
 
-  if (res.status === 404) return { email: simulateOptimization(text, tone), source: 'demo' };
+  if (res.status === 404) return demo();
   if (res.status === 401) return { needLogin: true };
   if (res.status === 429) {
     const data = await res.json().catch(() => ({}));
@@ -803,13 +835,17 @@ async function generateEmail(text, tone, length, formality, opts) {
   // Backend nicht erreichbar / Serverfehler (z. B. fehlender API-Schlüssel,
   // Funktion abgestürzt) → auf den Demo-Modus zurückfallen, damit die
   // Optimierung immer reagiert und ein Ergebnis liefert.
-  if (res.status >= 500) return { email: simulateOptimization(text, tone), source: 'demo' };
+  if (res.status >= 500) return demo();
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
     throw new Error(data.error || `API-Fehler (${res.status})`);
   }
 
   const data = await res.json();
+  // Sprache merken, in der der Server generiert hat (ältere Server-Version ohne
+  // lang-Feld = Deutsch) — translateResult stellt bei dieser Sprache das
+  // Original ohne API-Aufruf wieder her.
+  generatedLang = data.lang || 'de';
   return { email: data.email, subject: data.subject, variants: data.variants, source: 'api', remaining: data.remaining, unlimited: data.unlimited === true };
 }
 
@@ -1010,8 +1046,10 @@ function closeAuthModal() { closeModal(authModal); }
 // --- Rechts-Modals (Footer) ---
 const legalModal   = document.getElementById('legalModal');
 const privacyModal = document.getElementById('privacyModal');
-document.getElementById('legalLink')?.addEventListener('click', () => openModal(legalModal));
-document.getElementById('privacyLink')?.addEventListener('click', () => openModal(privacyModal));
+// Echte <a href>-Links (Crawler/Ad-Prüfer sehen /impressum + /privacy),
+// aber per JS weiterhin das gewohnte Modal statt Seitenwechsel.
+document.getElementById('legalLink')?.addEventListener('click', (e) => { e.preventDefault(); openModal(legalModal); });
+document.getElementById('privacyLink')?.addEventListener('click', (e) => { e.preventDefault(); openModal(privacyModal); });
 
 // Schließen: ×-Button / Hintergrund (data-close), Escape-Taste
 document.querySelectorAll('[data-close]').forEach((el) => {
@@ -1029,25 +1067,34 @@ const CHECKOUT_ENDPOINT = API_BASE + '/.netlify/functions/create-checkout-sessio
 
 async function startCheckout(plan, btn) {
   if (!plan) return;
+  // OHNE Login KEIN Checkout: Die Zahlung würde sonst keinem Konto zugeordnet
+  // und das bezahlte Abo ginge still verloren („nie still verlieren").
+  if (!currentUser) { openAuthModal('login'); return; }
   const original = btn ? btn.textContent : '';
   if (btn) { btn.disabled = true; btn.textContent = t('checkout_starting'); }
   try {
+    // Clerk-Token ist PFLICHT (Konto-Zuordnung für Webhook/Portal). Schlägt die
+    // Token-Beschaffung fehl, NICHT ohne Token weitermachen – gleiche Falle.
+    let token = null;
+    try { token = currentUser.jwt ? await currentUser.jwt() : null; } catch {}
+    if (!token) throw new Error('Kein Sitzungs-Token (Clerk)');
+
     const payload = { plan };
-    if (currentUser && currentUser.email) payload.email = currentUser.email;
-    const headers = { 'Content-Type': 'application/json' };
-    // Clerk-Token mitschicken → Stripe-Abo wird dem Konto zugeordnet (Webhook/Portal).
-    try { if (currentUser && currentUser.jwt) headers['Authorization'] = `Bearer ${await currentUser.jwt()}`; } catch {}
-    const res = await fetch(CHECKOUT_ENDPOINT, {
+    if (currentUser.email) payload.email = currentUser.email;
+    const res = await fetchWithTimeout(CHECKOUT_ENDPOINT, {
       method: 'POST',
-      headers,
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
       body: JSON.stringify(payload),
-    });
+    }, 20000);
     const data = await res.json().catch(() => ({}));
-    if (!res.ok || !data.url) throw new Error(data.error || 'Checkout-Fehler');
+    if (!res.ok || !data.url) {
+      console.error('Checkout-Fehler:', data.error || ('HTTP ' + res.status));
+      throw new Error('checkout_failed');
+    }
     window.location.href = data.url;          // Weiterleitung zu Stripe Checkout
   } catch (err) {
     console.error(err);
-    alert(err.message || t('checkout_error'));   // echten Fehlertext anzeigen
+    toast(t('checkout_error'), 'warn');       // lokalisiert, kein roher Stripe-Text
     if (btn) { btn.disabled = false; btn.textContent = original; }
   }
 }
@@ -1136,8 +1183,8 @@ async function selectTargetLang(code) {
 }
 
 async function translateResult(code) {
-  // Deutsch = Originalsprache der erzeugten E-Mail → ohne API wiederherstellen
-  if (code === 'de') {
+  // Zielsprache = Sprache, in der das Original erzeugt wurde → ohne API wiederherstellen
+  if (code === generatedLang) {
     output.value = baseResultText;
     setStatus(t('st_ready'), 'ok');
     return;
@@ -1152,7 +1199,8 @@ async function translateResult(code) {
     setStatus(t('st_ready'), 'ok');
   } catch (err) {
     console.error(err);
-    setStatus(t('st_error'), 'error');
+    // Ehrliche Meldung: Die OPTIMIERUNG hat geklappt, nur das Übersetzen nicht.
+    setStatus(t('st_translate_offline'), 'warn');
   } finally {
     output.classList.remove('is-translating');
   }
@@ -1167,9 +1215,9 @@ async function translateEmail(text, targetLang) {
 
   let res;
   try {
-    res = await fetch(API_ENDPOINT, { method: 'POST', headers, body: JSON.stringify({ text, targetLang }) });
+    res = await fetchWithTimeout(API_ENDPOINT, { method: 'POST', headers, body: JSON.stringify({ text, targetLang }) }, 60000);
   } catch {
-    return { offline: true };           // keine Verbindung / lokale Vorschau
+    return { offline: true };           // keine Verbindung / Timeout / lokale Vorschau
   }
   if (res.status === 404) return { offline: true };
   if (res.status === 401) return { needLogin: true };
@@ -1226,16 +1274,22 @@ if (enterpriseForm) {
   enterpriseForm.addEventListener('submit', async (e) => {
     e.preventDefault();
     const submit  = enterpriseForm.querySelector('.ent-form__submit');
-    const payload = new URLSearchParams(new FormData(enterpriseForm)).toString();
+    // Netlify Forms braucht das form-name-Feld und den POST auf die statische
+    // Datei public/__forms.html (dort ist das Formular für den Build-Scanner
+    // deklariert). Ein POST auf '/' liefert zwar 200, landet aber NIRGENDS —
+    // die Anfrage wäre still verloren.
+    const fd = new FormData(enterpriseForm);
+    fd.set('form-name', 'enterprise');
+    const payload = new URLSearchParams(fd).toString();
     submit.disabled = true;
     submit.textContent = t('enterprise_sending');
     if (entStatus) { entStatus.textContent = ''; entStatus.dataset.type = ''; }
     try {
-      const res = await fetch('/', {
+      const res = await fetchWithTimeout('/__forms.html', {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: payload,
-      });
+      }, 15000);
       if (!res.ok) throw new Error('HTTP ' + res.status);
       enterpriseForm.reset();
       if (entStatus) { entStatus.textContent = t('enterprise_success'); entStatus.dataset.type = 'ok'; }
@@ -1493,31 +1547,46 @@ async function renderBrain() {
     if (toggle) { toggle.disabled = false; toggle.checked = p.learning !== false; }
   } catch { box.textContent = t('set_brain_empty'); hideReset(); }
 }
-// Lern-Schalter: Änderung serverseitig speichern (fire-and-forget).
+// Lern-Schalter: Änderung serverseitig speichern. Das ist eine DATENSCHUTZ-
+// Einstellung — stilles Scheitern wäre besonders heikel (Schalter zeigt „aus",
+// Server lernt weiter). Bei Fehler: Schalter zurücksetzen + sichtbare Meldung.
 (function () {
   const toggle = document.getElementById('setLearning');
   if (!toggle) return;
   toggle.addEventListener('change', async () => {
-    const token = await mpBrainToken();
-    if (!token) return;
+    const wanted = toggle.checked;
+    const fail = () => { toggle.checked = !wanted; toast(t('set_save_error'), 'warn'); };
     try {
-      await fetch(API_BASE + '/.netlify/functions/profile', { method: 'PUT', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token }, body: JSON.stringify({ learning: toggle.checked }) });
-    } catch {}
+      const token = await mpBrainToken();
+      if (!token) { fail(); return; }
+      const res = await fetch(API_BASE + '/.netlify/functions/profile', { method: 'PUT', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token }, body: JSON.stringify({ learning: wanted }) });
+      if (!res.ok) fail();
+    } catch { fail(); }
   });
 })();
 
-// "Gelernten Stil zurücksetzen": nach Rückfrage per DELETE leeren, dann neu rendern.
+// "Gelernten Stil zurücksetzen": nach Rückfrage per DELETE leeren, dann neu
+// rendern. „Recht auf Vergessen" darf nie still scheitern → jeder Fehlerpfad
+// zeigt eine Meldung; Button während des Requests gesperrt.
 (function () {
   const btn = document.getElementById('setBrainReset');
   if (!btn) return;
   btn.addEventListener('click', async () => {
     if (!confirm(t('set_brain_reset_confirm'))) return;
-    const token = await mpBrainToken();
-    if (!token) return;
+    btn.disabled = true;
     try {
+      const token = await mpBrainToken();
+      if (!token) throw new Error('Kein Sitzungs-Token');
       const res = await fetch(API_BASE + '/.netlify/functions/profile', { method: 'DELETE', headers: { 'Authorization': 'Bearer ' + token } });
-      if (res.ok) { toast(t('set_brain_reset_done'), 'ok'); renderBrain(); }
-    } catch {}
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      toast(t('set_brain_reset_done'), 'ok');
+      renderBrain();
+    } catch (e) {
+      console.error('Stil-Reset fehlgeschlagen:', e);
+      toast(t('set_save_error'), 'warn');
+    } finally {
+      btn.disabled = false;
+    }
   });
 })();
 
@@ -1619,7 +1688,7 @@ async function renderSubscription() {
   try {
     const headers = {};
     if (currentUser.jwt) headers['Authorization'] = `Bearer ${await currentUser.jwt()}`;
-    const res = await fetch(SUBSCRIPTION_ENDPOINT, { headers });
+    const res = await fetchWithTimeout(SUBSCRIPTION_ENDPOINT, { headers }, 15000);
     if (res.status === 404) { box.innerHTML = renderSubHtml({ plan: 'free' }); wireSubButtons(box); return; } // Funktion (noch) nicht deployt
     if (!res.ok) throw new Error('status ' + res.status);
     const data = await res.json();
@@ -1638,7 +1707,7 @@ async function openPortal(btn) {
   try {
     const headers = { 'Content-Type': 'application/json' };
     if (currentUser.jwt) headers['Authorization'] = `Bearer ${await currentUser.jwt()}`;
-    const res = await fetch(PORTAL_ENDPOINT, { method: 'POST', headers });
+    const res = await fetchWithTimeout(PORTAL_ENDPOINT, { method: 'POST', headers }, 15000);
     const data = await res.json().catch(() => ({}));
     if (res.ok && data.url) { window.location.href = data.url; return; }
     toast(data.noCustomer ? t('set_sub_none_yet') : (data.error || t('set_sub_error')), 'warn');
@@ -1757,10 +1826,10 @@ renderSettingsAccount();
   const query = params.toString();
   window.history.replaceState({}, '', window.location.pathname + (query ? '?' + query : ''));
 
-  if (status === 'cancel') { alert(t('checkout_canceled')); return; }
+  if (status === 'cancel') { toast(t('checkout_canceled'), 'warn'); return; }
   if (status !== 'success') return;
 
-  alert(t('checkout_success'));
+  toast(t('checkout_success'), 'ok');
 
   // Der Stripe-Webhook aktiviert das Abo ASYNCHRON (ein paar Sekunden). Daher
   // kurz nachpollen, bis der neue Tarif serverseitig steht, und dann Tages-Limit

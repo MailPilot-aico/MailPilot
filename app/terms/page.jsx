@@ -32,7 +32,7 @@ const EN = {
     ['9. Changes & governing law',
       'We may update these terms; we will post the new version here and, for material changes, give reasonable notice. German law applies, excluding its conflict-of-law rules and, where applicable, the UN Convention on Contracts for the International Sale of Goods. Mandatory consumer-protection rights of your country of residence remain unaffected. Contact: info@mailpilot-ai.com.'],
   ],
-  note: 'Template text — please have it reviewed by a legal professional before going live. Last updated: June 2026.',
+  note: 'Last updated: June 2026.',
 }
 
 const DE = {

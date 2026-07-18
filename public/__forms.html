@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8" /><meta name="robots" content="noindex" /><title>MailPilot Forms</title></head>
+<body>
+  <!-- Statische Formular-Definition NUR für die Netlify-Forms-Erkennung beim Build.
+       Das echte Formular steckt im JS-gerenderten HTML (app/legacyHome.js) und ist
+       für den Build-Scanner unsichtbar — dieser dokumentierte Workaround macht die
+       Felder bekannt; script.js postet die Anfrage dann an /__forms.html.
+       Eingegangene Anfragen: Netlify → Site → Forms → "enterprise". -->
+  <form name="enterprise" netlify netlify-honeypot="bot-field" action="/" method="POST" hidden>
+    <input type="email" name="email" />
+    <textarea name="message"></textarea>
+    <input type="text" name="bot-field" />
+  </form>
+</body>
+</html>

@@ -80,6 +80,17 @@ export const handler = async (event) => {
       case "checkout.session.completed": {
         const s = evt.data.object;
         const accountId = s.client_reference_id || s.metadata?.account_id;
+        if (!accountId) {
+          // Darf seit dem Login-Gate im Frontend nicht mehr vorkommen. Falls doch:
+          // LAUT loggen (Session + Kunden-E-Mail), damit die Zahlung manuell im
+          // Stripe-Dashboard einem Konto zugeordnet werden kann — niemals still.
+          // Trotzdem 200 zurückgeben: Ein Retry würde nie eine accountId nachliefern.
+          console.error(
+            "ALARM: Zahlung OHNE Konto-Zuordnung! Session " + s.id +
+            ", Kunde " + (s.customer_details?.email || s.customer || "unbekannt") +
+            " — bitte manuell in Stripe/Supabase zuordnen."
+          );
+        }
         let plan = "starter";
         if (s.subscription) {
           const sub = await stripe.subscriptions.retrieve(s.subscription);

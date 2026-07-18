@@ -284,6 +284,12 @@ export const handler = async (event) => {
   const length = clampScale(body.length);       // 0 = sehr kurz … 100 = sehr ausführlich
   const formality = clampScale(body.formality);  // 0 = sehr locker … 100 = sehr förmlich
 
+  // Zielsprache der GENERIERUNG (UI-Sprache des Nutzers, Standard Deutsch).
+  // Direkt in der Zielsprache erzeugen erspart internationalen Nutzern den
+  // zweiten Übersetzungs-Aufruf (halbe Wartezeit, halbe Kosten, keine
+  // deutsche Mail, die kurz „aufblitzt").
+  const genLang = (typeof body.lang === "string" && LANGS[body.lang.trim()]) ? body.lang.trim() : "de";
+
   // Gemeinsamer Steuer-Block (Tonfall/Länge/Förmlichkeit) für beide Modi.
   const controls =
     `Gewünschter Tonfall: ${TONES[tone]}.\n` +
@@ -351,8 +357,15 @@ export const handler = async (event) => {
   const styleSummaryRule = styleSummary
     ? `\n\nSchreibe im persönlichen, zuvor gelernten Stil des Absenders. Merkmale dieses Stils:\n${styleSummary}\nÜbernimm diesen Stil (Ton, Anrede, Grußformel, Wortwahl, Förmlichkeit), NICHT konkrete Inhalte aus früheren E-Mails.`
     : "";
+  // Sprach-Regel: Die Basis-Prompts sprechen von einer „deutschen" E-Mail —
+  // bei anderer Zielsprache wird das hier ausdrücklich übersteuert.
+  // („Englische" → „Englisch" für „auf Englisch"; „Hindi" bleibt unverändert.)
+  const langName = LANGS[genLang].replace(/^([A-Za-zÄÖÜäöüß]+)e\b/, "$1");
+  const langRule = genLang === "de" ? "" :
+    `\n\nWICHTIG — Sprache: Verfasse die GESAMTE E-Mail (Anrede, Text und Grußformel) auf ${langName}, NICHT auf Deutsch — auch wenn die Notizen des Nutzers in einer anderen Sprache verfasst sind. Ausnahme: Falls eine BETREFF-Zeile verlangt ist, beginnt sie weiterhin wörtlich mit "BETREFF: ", nur ihr Inhalt ist auf ${langName}.`;
+
   const baseSystem = deescalate ? DEESCALATE_SYSTEM_PROMPT : (replyTo ? REPLY_SYSTEM_PROMPT : SYSTEM_PROMPT);
-  const system = baseSystem + correctionRule + styleSummaryRule + nameRule + signatureRule + industryRule + subjectRule + variantsRule;
+  const system = baseSystem + langRule + correctionRule + styleSummaryRule + nameRule + signatureRule + industryRule + subjectRule + variantsRule;
 
   try {
     const baseTokens = length >= 67 || replyTo ? 3000 : 2000;
@@ -373,7 +386,7 @@ export const handler = async (event) => {
       : [full];
     const parsed = parts.map((p) => parseSubject(p, wantSubject));
 
-    const out = { email: parsed[0].email, remaining: Math.max(0, limit - (used + 1)), unlimited: paid };
+    const out = { email: parsed[0].email, lang: genLang, remaining: Math.max(0, limit - (used + 1)), unlimited: paid };
     if (wantSubject) out.subject = parsed[0].subject;
     if (variants > 1 && parsed.length > 1) {
       out.variants = parsed.map((p) => ({ subject: p.subject, email: p.email }));

@@ -4,7 +4,7 @@ import { ClerkProvider } from '@clerk/nextjs'
 // Social-Netzwerke das Vorschaubild beim Teilen korrekt laden.
 const SITE_URL = 'https://mailpilot-ai.com'
 const TITLE = 'MailPilot — From notes to the perfect email'
-const DESCRIPTION = 'MailPilot — AI copilot that turns your bullet points into professional emails.'
+const DESCRIPTION = 'MailPilot — the AI email assistant that turns your bullet points into professional emails. In seconds, in 33 languages.'
 
 export const metadata = {
   metadataBase: new URL(SITE_URL),
@@ -13,7 +13,13 @@ export const metadata = {
   applicationName: 'MailPilot',
   alternates: { canonical: '/' },
   icons: {
-    icon: '/assets/logononame.png',
+    // Echte Marken-Icons (weißer Papierflieger auf Verlaufskachel) statt des
+    // alten 3-MP-JPEGs; 128px zusätzlich, weil Google für SERP-Favicons ≥48px will.
+    icon: [
+      { url: '/icons/mp-32.png', sizes: '32x32', type: 'image/png' },
+      { url: '/icons/mp-16.png', sizes: '16x16', type: 'image/png' },
+      { url: '/icons/mp-128.png', sizes: '128x128', type: 'image/png' },
+    ],
     apple: '/icons/icon-192.png',
   },
   appleWebApp: { capable: true, title: 'MailPilot', statusBarStyle: 'black-translucent' },
@@ -25,7 +31,7 @@ export const metadata = {
     title: TITLE,
     description: DESCRIPTION,
     locale: 'en_US',
-    images: [{ url: '/og.png', width: 1200, height: 630, alt: 'MailPilot — AI email copilot' }],
+    images: [{ url: '/og.png', width: 1200, height: 630, alt: 'MailPilot — AI email assistant' }],
   },
   // Twitter/X-Karte (großes Bild).
   twitter: {
@@ -36,9 +42,27 @@ export const metadata = {
   },
 }
 
+// Anmelde-/Registrier-Widget im MailPilot-Look statt der nackten weißen
+// Clerk-Standardkarte: dunkle Flächen, Marken-Violett, eigenes Logo. So bricht
+// das Design im Conversion-Moment (Klick auf „Kostenlos testen") nicht mehr.
+const clerkAppearance = {
+  layout: { logoImageUrl: '/icons/mp-128.png', socialButtonsVariant: 'blockButton' },
+  variables: {
+    colorPrimary: '#8b5cf6',
+    colorBackground: '#141021',
+    colorText: '#e7e2f3',
+    colorTextSecondary: '#a99fc0',
+    colorInputBackground: '#1b1430',
+    colorInputText: '#e7e2f3',
+    colorDanger: '#f87171',
+    borderRadius: '12px',
+    fontFamily: "Inter, 'Segoe UI', system-ui, sans-serif",
+  },
+}
+
 export default function RootLayout({ children }) {
   return (
-    <ClerkProvider>
+    <ClerkProvider appearance={clerkAppearance}>
       <html lang="en" suppressHydrationWarning>
         <head>
           {/* Theme früh setzen (vor dem ersten Paint), um Flackern zu vermeiden. */}
@@ -91,13 +115,17 @@ export default function RootLayout({ children }) {
                 operatingSystem: 'Web, Windows, macOS, Microsoft Outlook',
                 image: `${SITE_URL}/og.png`,
                 screenshot: `${SITE_URL}/og.png`,
-                inLanguage: ['en', 'de', 'es', 'fr', 'it', 'pt'],
+                inLanguage: [
+                  'en', 'de', 'es', 'fr', 'it', 'pt-BR', 'nl', 'pl', 'sv', 'da', 'nb',
+                  'fi', 'cs', 'sk', 'hu', 'ro', 'el', 'tr', 'ru', 'uk', 'bg', 'hr',
+                  'sr', 'zh', 'zh-TW', 'ja', 'ko', 'hi', 'id', 'th', 'vi', 'ar', 'he',
+                ],
                 featureList: [
                   'Turn bullet points into a finished email',
                   'Reply mode',
                   'Adjustable tone, length and formality',
                   'One-click rephrasing',
-                  'Translate into 15+ languages',
+                  'Write and translate emails in 33 languages',
                   'Automatic name and signature',
                 ],
                 offers: {

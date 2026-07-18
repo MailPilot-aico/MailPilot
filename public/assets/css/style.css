@@ -15,7 +15,7 @@
 
   --text:        #f3f0fa;
   --text-muted:  #a99fc0;
-  --text-faint:  #6e6388;
+  --text-faint:  #857aa0;   /* WCAG-AA-Kontrast (≥4.5:1) auf allen Flächen */
 
   --accent:      #8b5cf6;   /* Violett */
   --accent-2:    #a855f7;   /* auffälliges, modernes Lila (Primär-CTA) */
@@ -1053,7 +1053,7 @@ html { scroll-behavior: smooth; }
 
   --text:        #1a1230;
   --text-muted:  #574e70;
-  --text-faint:  #8c83a3;
+  --text-faint:  #6f6689;   /* WCAG-AA-Kontrast (≥4.5:1) im Hellmodus */
 
   --accent:      #7c3aed;
   --accent-2:    #9333ea;
@@ -1195,3 +1195,24 @@ html { scroll-behavior: smooth; }
 /* ---- Name-Eingabefeld in den Einstellungen ---- */
 .set-input { width: 100%; background: var(--bg-soft); color: var(--text); border: 1px solid var(--border); border-radius: 10px; padding: 9px 12px; font: inherit; font-size: 14px; }
 .set-input:focus { outline: none; border-color: var(--accent); }
+
+/* ============================================================
+   Mobil-Feinschliff (Ads-Traffic ist überwiegend mobil)
+   ============================================================ */
+@media (max-width: 880px) {
+  /* iOS Safari zoomt ungewollt in die Seite, sobald ein fokussiertes Formular-
+     feld unter 16px Schrift hat — 16px verhindert genau das. Bewusst KEIN
+     maximum-scale im Viewport (das würde auf Android den Pinch-Zoom sperren). */
+  .field, .input, .reply-box__field, .subject-row__field,
+  .set-input, .set-select, .set-sign, .ent-form__input { font-size: 16px; }
+}
+@media (max-width: 600px) {
+  /* Fingerfreundliche Mindest-Trefferflächen (~44px, BFSG/WCAG) für die
+     Kern-Bedienelemente — sonst fühlt sich das Tool „fummelig" an. */
+  .tone__pill, .tpl-chip, .refine-btn { min-height: 44px; padding-top: 10px; padding-bottom: 10px; }
+  .mic-btn, .subject-row__copy { min-width: 44px; min-height: 44px; }
+  .modal__close { min-width: 42px; min-height: 42px; }
+  .footer-link { display: inline-block; padding: 12px 8px; }
+  .slider input[type="range"]::-webkit-slider-thumb { width: 24px; height: 24px; }
+  .slider input[type="range"]::-moz-range-thumb { width: 24px; height: 24px; }
+}
